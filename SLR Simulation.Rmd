@@ -1,0 +1,41 @@
+---
+title: "SLR Simulation"
+author: "Chenfeng Hao"
+date: "9/3/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Simulate a Simple Linear Regression
+
+```{r simulate}
+x = seq(from = 0, to = 4, by = .1)
+error = rnorm(length(x), mean = 0, sd = 3.9)
+y = 30 + 10 * x + error
+mean(x)
+sd(error)
+sd(y)
+```
+
+## Plot X and Y
+
+```{r simulate-plot}
+plot(x, y)
+```
+## Fit a Simple Regression Model
+```{r}
+fitmodel = lm(y ~ x)
+fitmodel
+```
+
+## To get more information about the model
+```{r}
+summary(fitmodel)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

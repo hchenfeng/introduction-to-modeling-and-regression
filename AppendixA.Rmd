@@ -1,0 +1,171 @@
+---
+mainfont: DejaVu Sans
+title: 'Appendix A: Getting Started with R and Rmarkdown'
+author: "Chenfeng Hao"
+date: "SEP 3, 2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library("rstanarm")
+library("dplyr")
+library("ggplot2")
+library("skimr")
+```
+
+## The Basics
+
+You are going to write your homework using Rmarkdown.  You will use the Rstudio server at GVSU to do your homework, or if you wish you can install R and Rstudio locally on your home machine. The directions are in Appendix A to install R locally.   We will start by working through the exercises in Appendix A in the textbook to get more familiar with using R and Rmarkdown. In Rmarkdown we include a code block like below. Click the green arrow and see what happens. Next click Knit and see what happens.  It has a cute ball of yarn next to it.  
+
+```{r}
+1 / 3
+sqrt(2)
+curve(x ^ 2 + 5, from = -2, to = 2)
+```
+
+### Calling Functions
+
+Next insert another R code block by clicking Insert, and type in the code on pages 476 and 477. Use cut and paste to save yourself time typing.
+```{r}
+a <- 3  #a is assigned to be 3
+a = 3 #also a is assigned to be 3
+print(a)
+b = 3
+a + b
+a * b
+exp(a)
+10 ^ a #10 raised to the ath power
+log(b) #log base e
+log10(b)
+a ^ b
+round(3.435, 0)
+round(3.435, 1)
+round(3.435, 2)
+```
+What does the second argument in the round() function do? \
+Answer: Specifying the number of decimal places.
+
+```{r}
+x = c(4, 10, -1, 2.4) #c short for concatenate can be used to make a vector
+x  #if you just type x, R will print x
+```
+The seq function can be used to create vectors in sequence as well. Type the code on the middle of page 477 and run it to see what you get.
+
+```{r}
+seq(4, 54, 10)
+c(1, 3, 5)
+1:5
+c(1:5, 1, 3, 5)
+c(1:5, 10:20)
+seq(-1, 9, 2)
+```
+
+### Sampling and Random Numbers
+
+```{r}
+#get one random uniform between 0 and 100
+runif(1, 0, 100)
+# get 50 and put them in a vector, then plot a histogram
+random50 = runif(50, 0 , 100)
+#below is the simplest way to get a histogram.
+hist(random50)
+```
+Using ggplot graphics.  We do ggplot() because we just have a vector not a dataframe, when we work with a data set we will have data equals.  aes stands for asthetic attribute.Do not worry about the details now, we will see more later.  I will have you work through some material in ModernDive to help you better understand ggplot.  When you take STA518 you will learn more about creating graphics.
+
+```{r}
+ggplot() + aes(random50) + geom_histogram(bins = 10, color = "white")  
+```
+
+Look on page 477 in your text and sample from three colors, red, blue and green.  Add a code block and add the code below.
+Work your way through the rest of A.3.
+
+```{r}
+color <- c("blue", "red", "green")
+sample(color, 1)
+```
+
+
+### Load data
+We can load in data using the read.csv function.  The book data are all stored in 
+a directory like the one below, where mile is the example name. This is case sensitive. ~/SharedProjects/Kapitula/STA631/ROSExamples/Mile/data/mile.csv
+```{r }
+mile <- read.csv("~/SharedProjects/Kapitula/STA631/ROSExamples/Mile/data/mile.csv", header = TRUE)
+head(mile)
+```
+The skim function in the skimr package gives a summary of the variables in a data set.  Using this system it does not work if you want to create a pdf, due to the fonts for the spark histograms.
+```{r}
+skim(mile) #use if knitting to html
+#below is used if you have a unicode character error when knitting
+#skim_without_charts(mile)
+```
+
+### Make a Scatterplot
+
+To make a super simple and not as pretty scatterplot you can just do
+```{r}
+plot(mile$year, mile$seconds, main = "World Record Times in the mile run")
+```
+
+Using ggplot graphics gives you a more attractive graphic that can be customized. 
+
+```{r}
+ggplot(data = mile, mapping = aes(x = year, y = seconds)) +
+  geom_point()
+```
+We can now spice it up a little and add a linear regression line to our plot.
+
+
+```{r}
+ggplot(data = mile, mapping = aes(x = year, y = seconds)) +
+  geom_point() +
+  labs(x = "Year", y = "Time in Seconds",
+       title = "World record times in the mile run") +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+### Linear model
+
+We might want to fit a linear regression model using least squares regression and get our estimated coefficients.  The code below fits a simple linear regression model.  
+```{r}
+fitlm <- lm(seconds ~ year, data = mile)
+print(fitlm, digits = 3)
+```
+
+You can use summary to get more details. You also can get diagnostic plots.
+```{r}
+summary(fitlm)  #gives more details
+layout(matrix(1:6, nrow = 2)) #how to layout plots
+plot(fitlm, which = 1:6)  #get plots
+```
+
+### Bayesian Linear Regression
+
+The stan_glm package allows us to take a Bayesian approach.  For a problem like this you will basically get the same results as we will not use very informative priors.  It will not make much difference for most of what we will work on.  Lets see what happens.  The option `refresh = 0` suppresses the default Stan sampling
+progress output. This is useful for small data with fast
+computation. For more complex models and bigger data, it can be
+useful to see the progress.
+
+```{r }
+fit <- stan_glm(seconds ~ year, data = mile, refresh = 0)
+print(fit, digits = 3)
+```
+
+#### Predictions for the years 1900 and 2000
+
+```{r }
+print(coef(fit)[1] + coef(fit)[2] * c(1900, 2000), digits = 4) # Exact
+```
+We can use the estimates directly in ggplot as well by using geom_abline. Remember aes,
+stands for aesthetics and we can use + to keep adding on more graphical elements.
+
+
+```{r, tidy=TRUE}
+ggplot(aes(x=year, y=seconds), data=mile) + geom_point(shape=1, size=2) +
+    geom_abline(intercept=fit$coefficients[1], slope=fit$coefficients[2]) +
+    labs(x="Year", y="Time (seconds)",
+         title = "Approx. trend of record times in the mile run")
+```
