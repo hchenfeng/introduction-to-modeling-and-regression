@@ -9,13 +9,14 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+savefigs <- FALSE
 ```
 
 ## Simulate a Simple Linear Regression
 
 ```{r simulate}
 x = seq(from = 0, to = 4, by = .1)
-error = rnorm(length(x), mean = 0, sd = 3.9)
+error = rnorm(length(x), mean = 0, sd = 10)
 y = 30 + 10 * x + error
 mean(x)
 sd(error)

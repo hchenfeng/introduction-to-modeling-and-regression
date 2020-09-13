@@ -1,0 +1,69 @@
+---
+title: "assignment1"
+author: "Chenfeng Hao"
+date: "9/10/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1.2
+
+(a)
+
+```{r}
+x <- seq(from = 0, to = 4, by = .1)
+error <- rnorm(length(x), mean = 0, sd = 3.9)
+y <- 30 + 10 * x + error
+plot(x, y)
+```
+
+(b)
+
+```{r}
+x <- seq(from = 0, to = 4, by = .1)
+error <- rnorm(length(x), mean = 0, sd = 10)
+y <- 30 + 10 * x + error
+plot(x, y)
+```
+
+1.4 
+
+(a) Generalizing from sample to population 
+
+Predict voter shares from polls on the presidential election.  
+
+(b) Generalizing from treatment to control  
+
+Determine whether a vaccine is effective at preventing a certain disease from results in trials.   
+
+(c) Generalizing from observed measurements to the underlying constructs of interests 
+
+Determine user preferences for TV shows based on user playing history.   
+
+
+1.5 
+
+(a) Forecasting/classification 
+
+Predict the performance of a stock based on its history and current conditions.  
+
+(b) Exploring associations 
+
+Determine whether a particular risk factor, say high consumption of red meat, is associated with a higher rate of cancer diagnosis.
+
+(c) Extrapolation 
+
+Use vaccine trial results to determine the potential effects of the vaccine on the general population. 
+
+(d) Causal inference 
+
+Determine whether a particular intervention is effective at improving the social and economic prospects of young children.  
+
+1.10
+
+TBD
