@@ -1,0 +1,84 @@
+---
+title: "hw02 Problems from ROS"
+author: "Chenfeng Hao"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = T)
+library(tidyverse)
+library(haven)
+```
+
+# Chapter 2
+
+2.7 Reliability and validity:  
+
+(a) Give an example of a scenario of measurements that have validity but not reliability.  
+
+**Election exit polls usually ask the right questions, primarily "who voters voted for", so they are valid. However, they are often not reliable, for which there are multiple reasons. For example, voters might not want to disclose who they voted for; it is difficult to do random sampling in exit polls.**
+
+(b) Give an example of a scenario of measurements that have reliability but not validity. 
+
+**Phrenology is a debunked pseudoscience that studies the shape and size of human skulls to determine the character and mental capacity of human persons. Phrenology studies measure properties that are fairly stable for an adult human, the shape and size of their skull. However, the measurements are not valid because the shape and size of human skulls are not shown to be related to human character and mental capacity.**
+
+2.10 Working through your own example: Continuing the example from Exercise 1.10, graph your  data and discuss issues of validity and reliability. How could you gather additional data, at least  in theory, to address these issues?
+
+**I'm using one of the data sets I located from Harvard dataverse: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/QAE63X. The data was used in a published study on the relationship between violent games and bullying (https://www.sciencedirect.com/science/article/abs/pii/S074756321930411X, Teng et al. (2020)). When I was younger, I used to play video games that fall into the violent category by some standards. I also heard of research on connecting violence in real life to violent video games. My impression, without diving into the literature, is that the relationship is not well established. One often cited exception is Japan, where there are lots of players of violent video games, yet the overall level of violence in Japan is much lower than most elsewhere. I suspect the analysis is flawed in the current study. However, since the subject the authors are interested in is more specific than violence, maybe it is my preconception that is at fault. Either way, I think it would be a good exercise to conduct some analysis on the set of data they used for the study. What follows are some summary stats and random nonsensical plots.**
+
+```{r}
+test_data <- read_spss("../project/2. Raw data_T2_T3_T4VVGE_MD_AG.sav")
+
+# 1340 rows
+nrow(test_data)
+
+# 271 cols
+ncol(test_data)
+
+summary(test_data$Mean_violence2)
+
+hist(test_data$Mean_violence2)
+
+boxplot(test_data$Mean_violence2)
+
+ggplot(test_data, aes(T2_age, Mean_violence2)) + geom_point()
+```
+
+
+# Chapter 3 
+
+3.1 Weighted averages: A survey is conducted in a certain city regarding support for increased  property taxes to fund schools. In this survey, higher taxes are supported by 50% of respondents  aged 18–29, 60% of respondents aged 30–44, 40% of respondents aged 45–64, and 30% of  respondents aged 65 and up. Assume there is no nonresponse. 
+
+Suppose the sample includes 200 respondents aged 18–29, 250 aged 30–44, 300 aged 45–64,  and 250 aged 65+. Use the weighted average formula to compute the proportion of respondents  in the sample who support higher taxes. 
+\
+```{r}
+data_stratum <- 1:4
+ageGroup <- c("18-29", "30-44", "45-64", "65+")
+sampleSize <- c(200, 250, 300, 250)
+supportRate <- c(0.5, 0.6, 0.4, 0.3)
+tibble(data_stratum, ageGroup, sampleSize, supportRate)
+
+weighted_avg_of_support_rate <-
+  (sampleSize / sum(sampleSize)) %*% supportRate
+weighted_avg_of_support_rate
+```
+
+**The proportion of respondents  in the sample who support higher taxes is 45.5%.**
+
+3.2 Weighted averages: Continuing the previous exercise, suppose you would like to estimate the  proportion of all adults in the population who support higher taxes, so you take a weighted  average as in Section 3.1. Give a set of weights for the four age categories so that the estimated  proportion who support higher taxes for all adults in the city is 40%.  
+
+**To get an estimated overall support rate of 40% while holding the support rate within age groups constant, an alternative set of weights for the age groups is as follows: 0.1 (18-29), 0.2 (30-44), 0.2 (45-64), 0.5 (65+).**
+
+3.3 Probability distributions: Using R, graph probability densities for the normal distribution,  plotting several different curves corresponding to different choices of mean and standard  deviation parameters. 
+\
+```{r}
+curve(dnorm(x), from = -4, to = 4, main="Standard Normal Distribution with Mean 0 and Sd 1")
+
+curve(dnorm(x, mean = 1, sd = 0.5), from = -4, to = 4, main="Standard Normal Distribution with Mean 1 and Sd 0.5")
+
+curve(dnorm(x, mean = -2, sd = 1.5), from = -6, to = 6, main="Standard Normal Distribution with Mean -2 and Sd 1.5")
+```
+

@@ -1,0 +1,207 @@
+---
+title: "Homework 3"
+author: "Chenfeng Hao"
+date: "`r format(Sys.Date(), '%b %d, %Y')`"
+output:
+  pdf_document: 
+    latex_engine: xelatex
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = T)
+library(tidyverse)
+```
+
+ROS:  
+
+3.4 Probability distributions: Using a bar plot in R, graph the Poisson distribution with parameter  3.5.  
+\
+```{r}
+poissonpmf <- tibble(x = 0:15, prob = dpois(x, 3.5))
+
+ggplot(data = poissonpmf, mapping = aes(x = x, y = prob)) +
+  geom_col(fill = 'purple') +
+  ggtitle("Probability Mass Function for Poisson(param = 3.5)") +
+  xlab("x") + ylab("Pr(X=x)")
+```
+
+3.5 Probability distributions: Using a bar plot in R, graph the binomial distribution with n = 20 and  p = 0.3.  
+\
+```{r}
+random_binom <- tibble(x = 0:15, prob = dbinom(x, 20, 0.3))
+
+ggplot(data = random_binom, mapping = aes(x = x, y = prob)) +
+  geom_col(fill = 'purple') +
+  ggtitle("Probability Mass Function for Binomial(n = 20, p = 0.3)") +
+  xlab("x") + ylab("Pr(X=x)")
+```
+
+3.6 Linear transformations: A test is graded from 0 to 50, with an average score of 35 and a standard  deviation of 10. For comparison to other tests, it would be convenient to rescale to a mean of 100 and standard deviation of 15.  
+
+(a) Labeling the original test scores as x and the desired rescaled test score as y, come up with a  linear transformation, that is, values of a and b so that the rescaled scores y = a + bx have a  mean of 100 and a standard deviation of 15.  
+
+**b = 15 / 10 = 1.5, a = 100 - 1.5 * 35 = 47.5**
+
+(b) What is the range of possible values of this rescaled score y?  
+
+**new_range = scale * old_range = 1.5 * old_range = [0, 150]**
+
+(c) Plot the line showing y vs. x. 
+\
+```{r}
+scores <- tibble(x = 0:150, prob = dnorm(x, 100, 15))
+
+ggplot(data = scores, mapping = aes(x = x, y = prob)) +
+  geom_col(fill = 'purple') +
+  ggtitle("Probability Mass Function for Normal Distribution(mean = 100, std = 15)") +
+  xlab("score") + ylab("Pr(Score)")
+```
+
+
+3.8 Correlated random variables: Suppose that the heights of husbands and wives have a correlation  of 0.3, husbands’ heights have a distribution with mean 69.1 and standard deviation 2.9 inches,  and wives’ heights have mean 63.7 and standard deviation 2.7 inches. Let x and y be the heights  of a married couple chosen at random. What are the mean and standard deviation of the average  height, (x + y)/2? 
+
+**mean((x + y) / 2) = (69.1 + 63.7) / 2 = 66.4, std((x + y) / 2) = sqrt((1 / 2 * 2.9)^2^ + (1 / 2 * 2.7)^2^ + 2 * (1 / 4) * 0.3 * 2.9 * 2.7) $\approx$ 2.26**
+
+Other Questions 
+
+1. (10 pts) Let Y be the random variable consisting of the number of spots that face up upon rolling a standard 6 sided die.  Give the distribution (PMF) of Y.  Find the expected value, variance and standard deviation of Y.
+\
+```{r}
+# Expected value
+expectedY <- 0
+for (i in 1:6) {
+  expectedY <- expectedY + i * (1 / 6)
+}
+expectedY
+# Variance
+VarY <- 0
+for (i in 1:6) {
+  VarY <- VarY + (i - 3.5) ^ 2 * (1 / 6)
+}
+VarY
+# std
+stdY <- sqrt(VarY)
+stdY
+```
+
+**P(Y = y) = 1/6, where y = {1, 2, 3, 4, 5, 6} and P(Y = y) = 0 for all other values of y; E(Y) = ∑y*p(y) = 1*(1/6) + 2*(1/6) + ... + 6*(1/6) = 3.5; Var(Y) = ∑(y - µ)^2^ * p(y) = (1-3.5)^2^ * 1/6 + ... + (6-3.5)^2^ * 1/6 $\approx$ 2.92; std(Y) = sqrt(Var(Y)) $\approx$ 1.71 **
+
+
+2. (10 pts) Consider a random variable that takes on the values 25, 30, 45 and 50, with probabilities 0.15, 0.25, 0.35 and 0.25 respectively.  Find the expected value, variance and standard deviation of this random variable.  Hint, the pmf function p(x)= P(X=x) is: p(25) = .15 , p(30)=.25, p(45)=.35 and p(50)=.25, for all other x, P(X=x)=0.
+
+```{r}
+pmf_rand <- tibble(value = c(25, 30, 45, 50),
+                   prob = c(0.15, 0.25, 0.35, 0.25))
+expectedX <- 0
+v <- pmf_rand[["value"]]
+p <- pmf_rand[["prob"]]
+for (i in 1:length(v)) {
+  expectedX <- expectedX + v[i] * p[i]
+}
+expectedX
+# Variance
+VarX <- 0
+meanY <- mean(v)
+for (i in 1:length(v)) {
+  VarX <- VarX + (v[i] - meanY) ^ 2 * p[i]
+}
+VarX
+# std
+stdX <- sqrt(VarX)
+stdX
+```
+
+**E(X) = ∑x*p(x) = 25 * 0.15 + 30 * 0.25 + 45 * 0.35 + 50 * 0.25 = 39.5; Var(X) = ∑(x - µ)^2^ * p(x) = (25 - 37.5)^2^ * 0.15 + (30 - 37.5)^2^ * 0.25 + (45 - 37.5)^2^ * 0.35 + (50 - 37.5)^2^ * 0.25 = 96.25; std(X) = sqrt(Var(X)) $\approx$ 9.81**
+
+
+3.  (12 pts) Suppose a random variable, Y, has E(Y)= 3 and V(Y)=2 and an independent random variable X, has E(X)= 8 and V(X)=3.  (note that V(Y) stands for the Variance of Y)
+
+a.	Find E(2Y+5).
+
+**E(2Y+5) = 2 * E(Y) + 5 = 11**
+
+b.	Find V(2Y+5).
+
+**V(2Y+5) = 2^2^ * V(Y) = 8**
+
+c.	Find E(2X-3Y+3)
+
+**E(2X-3Y+3) = 2 * E(X) - 3 * E(Y) + 3 = 2 * 8 - 3 * 3 + 3 = 10**
+
+d.	Find V(2X-3Y+3)
+
+**V(2X-3Y+3) = V(2X) + V(-3Y) = 4 * V(X) + 9 * V(Y) = 4 * 3 + 9 * 2 = 30**
+
+4.  (12 pts) Suppose a basketball team makes it into the final four eight times, and that each tournament outcome is independent and they have probability of winning each tournament equal to 0.20.  Let the random variable X be the number of wins by this team in eight years.
+
+a.  What is the distribution of X?
+
+**Assuming binary results of the tournaments, the distribution of X is a binomial distribution, more specifically, X$\sim$Binomial(8, 0.20).**
+
+b.  What is the expected value of X (use a formula once you know the named distribution)
+
+**E(X) = np = 8 * 0.2 = 1.6**
+
+c. What is the variance and standard deviation of X (again use a formula).
+
+**V(X) = np(1-p) = 8 * 0.2 * 0.8 = 1.28**
+
+d.  What is the probability the team wins 3 or more games? (feel free to use R as a calculator to get probabilities)
+
+**P(3) + P(4) + P(5) + P(6) + P(7) + P(8) = 0.2030822**
+
+```{r}
+prob_win_3_or_more <- 0
+
+for (i in 3:8) {
+  prob_win_3_or_more <- prob_win_3_or_more + dbinom(i,8,0.2)
+}
+
+prob_win_3_or_more
+```
+
+**or 1 - (P(0) + P(1) + P(2)) = 0.2030822**
+
+```{r}
+prob_win_less_than_3 <- 0
+
+for (i in 0:2) {
+  prob_win_less_than_3 <- prob_win_less_than_3 + dbinom(i,8,0.2)
+}
+
+prob_win_less_than_3 <- 1 - prob_win_less_than_3
+
+prob_win_less_than_3
+```
+
+
+5. Davis and Lawrance (1989) present time-to-failure data for 171 automobile tires.  Baltazar-Aban and Pena (1995) modeled these data with an exponential distribution with a failure rate of 0.003 tire per hour.  Suppose one tire is randomly selected.
+
+a. ( 3pts)	Suppose a random variable X is the time to failure for the tires in hours.  What is the distribution of X (include the value of the parameter). 
+
+**X~Geometric(0.003)**
+
+b.  ( 3pts) What is the probability that the selected tire fails during the first 100 hours of testing?
+
+**P~X~(100) = p * (1 - p)^(100-1)^ = 0.003 * (1 - 0.003)^(100-1)^ $\approx$ 0.0022**
+
+c.  ( 3pts)  What is the probability that the selected tire fails between 50 and 150 hours of testing?  
+
+**P~X~(50) - P~X~(150) = p * (1 - p)^(150-1)^ - p * (1 - p)^(50-1)^ $\approx$ 0.00067**
+
+d.  ( 3pts) What is the probability that the selected tire survives more than 200 hours?
+
+**1 - P~X~(200) = 1 - p * (1 - p)^(200-1)^  $\approx$ 0.99835**
+
+e.  ( 3pts) What is the expected time to failure (ie population mean time to failure) for a randomly selected tire?
+
+**E(X) = 1 / p = 1 / 0.003 = 333.3333**
+
+f.  ( 3pts) What is the variance and the standard deviation for the time to failure for a randomly selected tire.
+
+**Var(X) = p / (1 - p)^2^ $\approx$ 0.003, SD(X) = sqrt(Var(X)) $\approx$ 0.055**
+
+g. ( 6pts) What is the median time to failure?
+
+**median(X) = -1 / (log~2~(1 - p)) = 230.7023 **
