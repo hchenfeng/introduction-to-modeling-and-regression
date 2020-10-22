@@ -1,0 +1,37 @@
+---
+title: "Assignment 5 ROS"
+author: "Chenfeng Hao"
+date: "`r format(Sys.time(), tz='EST', '%d %b %Y')`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+6.5 Regression prediction and averages: The heights and earnings data in Section 6.3 are in the  folder Earnings. Download the data and compute the average height for men and women in the  sample.  
+
+(a) Use these averages and fitted regression model displayed on page 84 to get a model-based  estimate of the average earnings of men and of women in the population.  
+
+(b) Assuming 52% of adults are women, estimate the average earnings of adults in the population.  
+
+(c) Directly from the sample data compute the average earnings of men, women, and everyone.  Compare these to the values calculated in parts (a) and (b).  
+
+6.6 Selection on x or y:  (a) Repeat the analysis in Section 6.4 using the same data, but just analyzing the observations for  mothers’ heights less than the mean. Confirm that the estimated regression parameters are  roughly the same as were obtained by fitting the model to all the data.  (b) Repeat the analysis in Section 6.4 using the same data, but just analyzing the observations for  daughters’ heights less than the mean. Compare the estimated regression parameters and  discuss how they differ from what was obtained by fitting the model to all the data.  (c) Explain why selecting on daughters’ heights had so much more of an effect on the fit than  selecting on mothers’ heights. 
+
+7.2 Fake-data simulation and regression: Simulate 100 data points from the linear model, y =  a + bx + error, with a = 5, b = 7, the values of x being sampled at random from a uniform  distribution on the range [0, 50], and errors that are normally distributed with mean 0 and standard  deviation 3. 
+
+(a) Fit a regression line to these data and display the output.  
+
+(b) Graph a scatterplot of the data and the regression line.  
+
+(c) Use the text function in R to add the formula of the fitted line to the graph.  
+
+7.3 Fake-data simulation and fitting the wrong model: Simulate 100 data points from the model,  y = a + bx + cx2 + error, with the values of x being sampled at random from a uniform  distribution on the range [0, 50], errors that are normally distributed with mean 0 and standard  deviation 3, and a, b, c chosen so that a scatterplot of the data shows a clear nonlinear curve.  
+
+(a) Fit a regression line stan_glm(y ~ x) to these data and display the output.  
+
+(b) Graph a scatterplot of the data and the regression line. This is the best-fit linear regression.  What does “best-fit” mean in this context? 
+
+8.5 Influence of individual data points: A linear regression is fit to the data below. Which point has  the most influence (see Section 8.2) on the slope? 
+

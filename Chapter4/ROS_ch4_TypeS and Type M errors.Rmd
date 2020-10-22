@@ -89,6 +89,7 @@ parameter being our postulated effect size .5, and the second being our
 hypothetical standard error of 1. If you prefer to not use ggplot graphics like I do
 here, set the `gg` argument to FALSE.
 
+Below are simulated Z statistics, when they are bigger than 1.96 is absolute value we reject the null hypothesis using alpha = 0.05.
 
 ```{r}
 sim_plot(.5,1)
