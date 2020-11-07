@@ -1,0 +1,405 @@
+---
+title: 'Cross Validation in R '
+author: "Chenfeng Hao"
+date: "10/29/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+```
+
+
+```{r start, results="hide"}
+library(ISLR) 
+library(tidyverse)
+library(GGally)
+library(moderndive)
+library(skimr)
+library(rstanarm)
+library(bayesplot)
+theme_set(theme_classic())
+```
+ROS Chapter 11, Section 7 and 8
+ISL Chapter 5
+his lab on Cross-Validation and Bootstrap in R comes from p. 190-197 of "Introduction to Statistical Learning with
+Applications in R" by Gareth James, Daniela Witten, Trevor Hastie and Robert Tibshirani. It was re-implemented in Fall 2016 in `tidyverse` format by Amelia McNamara and R. Jordan Crouser at Smith College and then edited more by Prof. Kapitula.
+
+## Miles per Gallon
+
+The Auto data set is included in the ISLR package and has gas mileage, horsepower and other informaton on 392 vehicles (from the 1980s).  The variables in the data set are:
+* mpg: miles per gallon
+* cylinders: Number of cylinders between 4 and 8
+* displacement: Engine displacement (cu. inches)
+* horsepower: Engine horsepower
+* weight: Vehicle weight (lbs.)
+* acceleration: Time to accelerate from 0 to 60 mph (sec.)
+* year: Model year (modulo 100)
+* origin: Origin of car (1. American, 2. European, 3. Japanese)
+* name: Vehicle name
+The orginal data contained 408 observations but 16 observations with missing values were removed.
+
+```{r}
+data(Auto, package = "ISLR")
+Auto <- as_tibble(Auto)
+glimpse(Auto)
+```
+
+```{r}
+Auto %>% skim_without_charts()
+```
+Now, suppose that we want to predict mpg from horsepower 
+Two models:
+
+1.  mpg ~ horsepower
+2.  mpg ~ horsepower + horsepower^2
+
+Which model gives a better fit?
+Could do:
+Randomly split Auto data set into training (196 obs.)  and validation data (196 obs.)
+
+
+# 5.3.1 The Validation Set Approach
+
+In this section, we'll explore the use of the validation set approach in order to estimate the
+test error rates that result from fitting various linear models on the `Auto`data set.
+
+Before we begin, we use the `set.seed()`function in order to set a seed for
+the random number generator, so that you'll obtain precisely the same results as those shown in the book. It is generally a good idea to set a random seed when performing an analysis such as cross-validation
+that contains an element of randomness, so that the results obtained can be reproduced precisely at a later time.
+
+We begin by using the `sample_n()` and `setdiff()` functions to split the set of observations into two halves. We'll start by selecting a random subset of 196 observations out of the original 392 observations. We refer to these observations as the training
+set.
+
+```{r}
+set.seed(1)
+
+train = Auto %>%
+  sample_n(196)
+
+test = Auto %>%
+  setdiff(train)
+```
+
+We then use `lm()`to fit a linear regression using only
+the observations corresponding to the training set.
+
+
+```{r}
+model_LR = lm(mpg ~ horsepower, data = train)
+summary(model_LR)
+#plot(model_LR)
+```
+
+We now use the `predict()`function to estimate the response for the test
+observations, and we use the `mean()`function to calculate the MSE of the
+196 observations in the test set:
+
+```{r}
+test = test %>%
+  mutate(predictions_lin = predict(model_LR, test))
+
+MSE_slr <- test %>%
+  summarize(MSE_slr = mean((mpg - predictions_lin) ^ 2))
+
+MSE_slr
+```
+
+Therefore, the estimated test MSE for the linear regression fit is 26.14. We
+can use the `poly()`function to estimate the test error for the quadratic
+and cubic regressions.
+
+```{r}
+model_QUAD = lm(mpg~poly(horsepower,2), data=train)
+
+test = test %>%
+  mutate(predictions_quad = predict(model_QUAD, test))
+test %>% 
+  summarize(MSE_quad = mean((mpg-predictions_quad)^2))
+
+model_CUBIC = lm(mpg~poly(horsepower,3),data=train)
+
+test = test %>%
+  mutate(predictions_cubic = predict(model_CUBIC, test))
+test %>%
+  summarize(MSE_cubic = mean((mpg-predictions_cubic)^2))
+```
+
+If we choose a different
+training set instead, then we will obtain somewhat different errors on the
+validation set. We can test this out by setting a different random seed:
+
+```{r}
+set.seed(2)
+
+train = Auto %>%
+  sample_n(196)
+
+test = Auto %>%
+  setdiff(train)
+
+model_LR2 = lm(mpg~horsepower, data=train)
+
+test = test %>%
+  mutate(predictions_slr = predict(model_LR2, test))
+
+model_QUAD2=lm(mpg~poly(horsepower,2),data=train)
+
+test = test %>%
+  mutate(predictions_quad = predict(model_QUAD2, test))
+
+model_CUBIC2=lm(mpg~poly(horsepower,3),data=train)
+
+test = test %>%
+  mutate(predictions_cubic =  predict(model_CUBIC2, test))
+
+MSE_test=test %>%
+  summarize(MSE_slr = mean((mpg-predictions_slr)^2),
+            MSE_quad = mean((mpg - predictions_quad)^2),
+            MSE_cube = mean((mpg - predictions_cubic)^2))
+MSE_test
+```
+
+Using this split of the observations into a training set and a validation
+set, we find that the validation set error rates for the models with linear,
+quadratic, and cubic terms are `r MSE_test[1]` ,`r MSE_test[2]` and `r MSE_test[3]`  respectively.
+
+These results are consistent with our previous findings: a model that
+predicts `mpg` using a quadratic function of `horsepower` performs better than
+a model that involves only a linear function of `horsepower`, and there is
+little evidence in favor of a model that uses a cubic function of `horsepower`.
+
+# 5.3.2 Leave-One-Out Cross-Validation
+
+The LOOCV estimate can be automatically computed for any generalized
+linear model using the `glm()` and `cv.glm()` functions. If we use `glm()` to fit a model
+without passing in the family argument, then it performs linear regression,
+just like the `lm()` function. The following should yield identical models:
+
+```{r}
+model_GLR=glm(mpg~horsepower, data=Auto)
+coef(model_GLR)
+
+model_LR=lm(mpg~horsepower, data=Auto)
+coef(model_LR)
+```
+
+In this lab, we will perform linear
+regression using the `glm()` function rather than the `lm()` function because
+the latter can be used together with `cv.glm()` to perform cross-validation. The `cv.glm()` function is part of the `boot` library.
+
+```{r}
+library(boot)
+model_GLR = glm(mpg ~ horsepower, data = Auto)
+cv_error = cv.glm(Auto, model_GLR)
+
+# estimate of MSE via LOOCV
+cv_error$delta
+```
+
+The `cv.glm()` function produces a list with several components. The two
+numbers in the delta vector contain the cross-validation results. In this case the numbers are identical (up to two decimal places) and correspond
+to the LOOCV statistic: our cross-validation estimate for the test
+error is approximately `R round(cv_error$delta[1],2)`.
+
+We can repeat this procedure for increasingly complex polynomial fits.
+To automate the process, we use the `for()` function to initiate a for loop
+which iteratively fits polynomial regressions for polynomials of order `i = 1`
+to `i = 5` and computes the associated cross-validation error. 
+
+This command may take a couple of minutes to run.
+
+```{r}
+deltas = data.frame(delta1 = 0, delta2 = 0)
+for (i in 1:5) {
+  model_GLR = glm(mpg ~ poly(horsepower, i), data = Auto)
+  deltas[i, ] = cv.glm(Auto, model_GLR)$delta
+}
+deltas
+```
+
+Here we see a sharp drop in the estimated test MSE between
+the linear and quadratic fits, but then no clear improvement from using
+higher-order polynomials.
+
+# LOOCV using stan_lm
+
+This is supposed to be quick but it takes a couple minutes.
+
+```{r}
+#deltas = data.frame(delta1=0, delta2=0)
+for (i in 1:5) {
+  stan_fit = stan_glm(mpg ~  poly(horsepower, i),
+                      data = Auto,
+                      refresh = 0)
+  if (i == 1) {
+    looall = loo(stan_fit)
+  }
+  else{
+    looall = rbind(looall, loo(stan_fit))
+  }
+}
+looall
+```
+Here we see a sharp drop in the looic between
+the linear and quadratic fits, but then no clear improvement from using
+higher-order polynomials.
+
+# 5.3.3 k-Fold Cross-Validation
+
+The `cv.glm()` function can also be used to implement `k`-fold CV. Below we
+use `k = 10`, a common choice for `k`, on the `Auto` data set. We once again set
+a random seed and initialize a vector in which we will store the CV errors
+corresponding to the polynomial fits of orders one to ten.
+
+```{r}
+set.seed(1)
+cv_errors = data.frame(delta1 = 0, delta2 = 0)
+
+for (i in 1:10) {
+  model_GLR = glm(mpg ~ poly(horsepower, i), data = Auto)
+  cv_errors[i,] = cv.glm(Auto, model_GLR, K = 10)$delta
+}
+cv_errors
+```
+
+Notice that the computation time is **much** shorter than that of LOOCV.
+(In principle, the computation time for LOOCV for a least squares linear
+model should be faster than for `k`-fold CV, due to the availability of the
+formula (5.2) for LOOCV; however, unfortunately the `cv.glm()` function
+does not make use of this formula.) We still see little evidence that using
+cubic or higher-order polynomial terms leads to lower test error than simply
+using a quadratic fit.
+
+We saw in Section 5.3.2 that the two numbers associated with delta are
+essentially the same when LOOCV is performed. When we instead perform
+`k`-fold CV, then the two numbers associated with delta differ slightly. The first is the standard `k`-fold CV estimate, as in (5.3). The second is a bias-corrected
+version. On this data set, the two estimates are very similar to
+each other.
+
+# An Application to Credit Data
+
+Now that you're armed with more useful technique for resampling your data, let's try fitting a model for the `Credit` dataset:
+
+```{r}
+data(Credit, package = "ISLR")
+Credit <- as_tibble(Credit)
+Credit <- Credit %>%
+  mutate(Limit1000 = Limit / 1000, Balance1000 = Balance / 1000) 
+```
+
+First we'll try just holding out a random 20% of the data:
+
+```{r}
+MSE_test=1:10
+for (i in 1:10){
+
+    set.seed(i)
+
+    train = Credit %>%
+      sample_frac(0.2)
+
+    test = Credit %>%
+      setdiff(train)
+      
+    #predict using Limit, Rating and Age
+    lm_fit <- lm(Balance ~ Limit + Rating + Age, data = Credit)
+    
+    test = test %>%
+  mutate(predictions =  predict(lm_fit, test))
+
+MSE_testi=test %>%
+  summarize(MSE = mean((Balance-predictions)^2))
+  MSE_test[i]=MSE_testi
+}
+MSE_test
+```
+
+See how we get different error rates depending on how we choose our test set. That's no good!
+
+Let's try doing Cross-validation here we use K=10 which is a fairly common k to use.
+
+```{r}
+set.seed(1)
+cv_errors = data.frame(delta1 = 0, delta2 = 0)
+
+for (i in 1:10) {
+  model_fit = glm(Balance ~ Limit + Rating + Age, data = Credit)
+  cv_errors[i, ] = cv.glm(Credit, model_fit, K = 10)$delta
+}
+cv_errors
+```
+Retry with a different model
+\
+```{r}
+set.seed(1)
+cv_errors = data.frame(delta1 = 0, delta2 = 0)
+
+for (i in 1:10) {
+  model_fit = glm(Balance ~ Limit + Rating + Age + Student, data = Credit)
+  cv_errors[i, ] = cv.glm(Credit, model_fit, K = 10)$delta
+}
+cv_errors
+mean(cv_errors$delta1)
+```
+
+# 5.3.4 in ISL The Bootstrap
+
+In stan_lm we were able to get a sample from our posterior distribution for a parameter such as the betas in a regression model. A similiar type approach that does not use Bayesian methods and so only uses the data is bootstrap resampling with replacement. We can use resampling to mimic the sampling variation and get a distribution for a parameter as well.  I will only focus briefly here on using the bootstrap for a SLR model using the `infer` package in R.
+
+
+# Bootstrap for SLR
+
+The bootstrap approach can be used to assess the variability of the coefficient
+estimates and predictions from a statistical learning method. Here
+we use the bootstrap approach using the infer package in order to assess the variability of the
+estimates for $\beta_0$ and $\beta_1$, the intercept and slope terms for the linear regression
+model that uses horsepower to predict mpg in the Auto data set. We
+will compare the estimates obtained using the bootstrap to those obtained
+using the formulas for $SE(\hat{\beta}_0)$ and $SE(\hat{\beta}_1)$ .
+
+standard way
+
+```{r}
+model_LR = lm(mpg~horsepower, data=Auto)
+summary(model_LR)
+confint(model_LR)
+model_LR
+```
+
+Stan LM way
+```{r}
+lm_stan <- stan_glm(mpg~horsepower, data=Auto, refresh=0 )
+# Get regression table:
+print(lm_stan)
+sims=as.matrix(lm_stan)
+#intercept
+quantile(sims[,1],c(0.025,0.975))
+#slope
+quantile(sims[,2],c(0.025,0.975))
+```
+
+
+```{r}
+library(infer)
+bootstrap_distn_slope <- Auto %>% 
+  specify(formula = mpg ~ horsepower) %>%
+  generate(reps = 1000, type = "bootstrap") %>% 
+  calculate(stat = "slope")
+bootstrap_distn_slope[1:5,]
+visualize(bootstrap_distn_slope)
+bootstrap_distn_slope %>% 
+  get_confidence_interval(type = "percentile", level = 0.95)
+bootstrap_distn_slope %>% 
+  get_confidence_interval(type = "se", level = 0.95,point_estimate=summary(model_LR)$coefficients[2,1])
+
+
+
+```
+The ROS book notes some limitations of the bootstrap on page 75.  The benefit is that it is intuitive and does not require probability theory but for it to give reasonable values you still need good data and a well estimated model.  If you have a model that does not fit well or over fits your problems will not be solved by using the bootstrap.
+
+
+
+

@@ -6,32 +6,234 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = T, warning = F)
+library(tidyverse)
+library(tibble)
+library(rstanarm)
+library(ggplot2)
 ```
 
 6.5 Regression prediction and averages: The heights and earnings data in Section 6.3 are in the  folder Earnings. Download the data and compute the average height for men and women in the  sample.  
 
-(a) Use these averages and fitted regression model displayed on page 84 to get a model-based  estimate of the average earnings of men and of women in the population.  
+\
+```{r}
+earnings <- read.csv("earnings.csv")
+
+earnings[, "male"] <- as.factor(earnings[, "male"])
+
+earnings %>% group_by(male) %>% summarise(mean(height))
+```
+
+
+(a) Use these averages and fitted regression model displayed on page 84 to get a model-based estimate of the average earnings of men and of women in the population.  
+\
+```{r}
+earnings.women  <-  -26.0 + 0.6 * 64.48642 + 10.6 * 0
+earnings.women
+
+earnings.men  <-  -26.0 + 0.6 * 70.08889 + 10.6 * 1
+earnings.men
+```
+
+95% CI for average women earnings: \$12,692 $\pm$ \$42,800  
+
+95% CI for average men earnings: \$26,653 $\pm$ \$42,800  
 
 (b) Assuming 52% of adults are women, estimate the average earnings of adults in the population.  
+\
+```{r}
+average.earnings.population <-
+  earnings.women * 0.52 + earnings.men * 0.48
+average.earnings.population
+```
+Estimate of the average earnings of adults in the population: \$19,393
 
 (c) Directly from the sample data compute the average earnings of men, women, and everyone.  Compare these to the values calculated in parts (a) and (b).  
+\
+```{r}
+average.earnings.women <-
+  earnings %>% filter(male == 0) %>% summarise(mean(earnk))
+average.earnings.women
 
-6.6 Selection on x or y:  (a) Repeat the analysis in Section 6.4 using the same data, but just analyzing the observations for  mothers’ heights less than the mean. Confirm that the estimated regression parameters are  roughly the same as were obtained by fitting the model to all the data.  (b) Repeat the analysis in Section 6.4 using the same data, but just analyzing the observations for  daughters’ heights less than the mean. Compare the estimated regression parameters and  discuss how they differ from what was obtained by fitting the model to all the data.  (c) Explain why selecting on daughters’ heights had so much more of an effect on the fit than  selecting on mothers’ heights. 
+average.earnings.men <-
+  earnings %>% filter(male == 1) %>% summarise(mean(earnk))
+average.earnings.men
+
+average.earnings <- mean(earnings$earnk)
+average.earnings
+
+tribble(
+  ~ gender,
+  ~ predicted.earning,
+  ~ data.earning,
+  ~ difference,
+  "men",
+  earnings.men,
+  average.earnings.men$`mean(earnk)`,
+  average.earnings.men$`mean(earnk)` - earnings.men,
+  "women",
+  earnings.women,
+  average.earnings.women$`mean(earnk)`,
+  average.earnings.women$`mean(earnk)` - earnings.women,
+  "all",
+  average.earnings.population,
+  average.earnings,
+  average.earnings - average.earnings.population
+)
+```
+(all in thousands of dollars)  
+
+6.6 Selection on x or y:  
+
+\
+```{r}
+heights <- read.table("Heights.txt", header = T)
+fit_1 <-
+  stan_glm(daughter_height ~ mother_height,
+           data = heights,
+           refresh = 0)
+fit_1
+```
+
+
+(a) Repeat the analysis in Section 6.4 using the same data, but just analyzing the observations for  mothers’ heights less than the mean. Confirm that the estimated regression parameters are roughly the same as were obtained by fitting the model to all the data.  
+
+\
+```{r}
+mean_mother_height <- mean(heights$mother_height)
+heights.less.mmh <-
+  heights %>% filter(mother_height < mean_mother_height)
+fit_heights.less.mmh <-
+  stan_glm(daughter_height ~ mother_height,
+           data = heights.less.mmh,
+           refresh = 0)
+fit_heights.less.mmh
+
+data.frame(fit_heights.less.mmh$coefficients, fit_1$coefficients)
+
+ggplot(data = heights.less.mmh, aes(y = daughter_height, x = mother_height)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+
+(b) Repeat the analysis in Section 6.4 using the same data, but just analyzing the observations for  daughters’ heights less than the mean. Compare the estimated regression parameters and  discuss how they differ from what was obtained by fitting the model to all the data.  
+
+\
+```{r}
+mean_daughter_height <- mean(heights$daughter_height)
+heights.less.mdh <-
+  heights %>% filter(daughter_height < mean_daughter_height)
+fit_heights.less.mdh <-
+  stan_glm(daughter_height ~ mother_height,
+           data = heights.less.mdh,
+           refresh = 0)
+fit_heights.less.mdh
+
+data.frame(fit_heights.less.mdh$coefficients, fit_1$coefficients)
+
+ggplot(data = heights.less.mdh, aes(y = daughter_height, x = mother_height)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+
+(c) Explain why selecting on daughters’ heights had so much more of an effect on the fit than  selecting on mothers’ heights. 
+\
+```{r}
+ggplot(data = heights, aes(y = daughter_height, x = mother_height)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_hline(yintercept = mean_daughter_height, color = "red") +
+  geom_vline(xintercept = mean_mother_height, color = "red")
+```
+  
+Compared with the model of the whole dataset, the model (mod_daughter) with only data where daughter heights are less than its mean cuts off the top half of the data points in the plot (as marked by the horizontal red line), whereas the model (mod_mother) with only data where mother heights are less than its mean cuts off the right half of the data points in the plot (as marked by the vertical red line). In mod_daughter, the lower heights data points get more leverage when the upper half is removed, and pull the regression line down significantly. In mod_mother, the spread of the remaining data stays the same, so the regression line is not changed by much.
+
+
 
 7.2 Fake-data simulation and regression: Simulate 100 data points from the linear model, y =  a + bx + error, with a = 5, b = 7, the values of x being sampled at random from a uniform  distribution on the range [0, 50], and errors that are normally distributed with mean 0 and standard  deviation 3. 
 
+\
+```{r}
+n <- 100
+a <- 5
+b <- 7
+x <- runif(n, 0, 50)
+error <- rnorm(n, 0, 3)
+y <- a + b * x + error
+fake.data <- data.frame(x, y)
+```
+
+
 (a) Fit a regression line to these data and display the output.  
 
+```{r}
+fake.mod <- stan_glm(y ~ x, data = fake.data, refresh = 0)
+fake.mod
+```
+
+
 (b) Graph a scatterplot of the data and the regression line.  
+\
+```{r}
+plot(x, y)
+a_hat <- coef(fake.mod)[1]
+b_hat <- coef(fake.mod)[2]
+abline(a_hat, b_hat)
+```
+
 
 (c) Use the text function in R to add the formula of the fitted line to the graph.  
+\
+```{r}
+plot(x, y)
+a_hat <- coef(fake.mod)[1]
+b_hat <- coef(fake.mod)[2]
+abline(a_hat, b_hat)
+
+x_bar <- mean(x)
+text(x_bar,
+     a_hat + b_hat * x_bar,
+     paste("y = ", round(a_hat, 2), "+", round(b_hat, 2), "* x"),
+     adj = -0.2)
+```
+
 
 7.3 Fake-data simulation and fitting the wrong model: Simulate 100 data points from the model,  y = a + bx + cx2 + error, with the values of x being sampled at random from a uniform  distribution on the range [0, 50], errors that are normally distributed with mean 0 and standard  deviation 3, and a, b, c chosen so that a scatterplot of the data shows a clear nonlinear curve.  
 
+\
+```{r}
+n <- 100
+a <- 5
+b <- 7
+c <- 9
+x <- runif(n, 0, 50)
+error <- rnorm(n, 0, 3)
+y <- a + b * x + c * x ^ 2 + error
+fake.data <- data.frame(x, y)
+```
+
+
 (a) Fit a regression line stan_glm(y ~ x) to these data and display the output.  
+\
+```{r}
+fake.mod <- stan_glm(y ~ x, data=fake.data, refresh=0)
+fake.mod
+```
 
-(b) Graph a scatterplot of the data and the regression line. This is the best-fit linear regression.  What does “best-fit” mean in this context? 
 
-8.5 Influence of individual data points: A linear regression is fit to the data below. Which point has  the most influence (see Section 8.2) on the slope? 
+(b) Graph a scatterplot of the data and the regression line. This is the best-fit linear regression.  What does “best-fit” mean in this context?  
+\
+```{r}
+ggplot(data = fake.data, aes(y = y, x = x)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+```
 
+In this context, “best-fit” means this is the line that minimizes sum of squared errors. 
+
+
+8.5 Influence of individual data points: A linear regression is fit to the data below. Which point has  the most influence (see Section 8.2) on the slope?  
+
+The right most point has the most influence on the slope of the fitted line, because it has the largest squared error.
