@@ -78,7 +78,7 @@ summary(fit.1)
 ```
 **Answer: **  
 
-The slope coefficient (0.693) is not statistically significant.  
+The slope coefficient (p-value = 0.693) is not statistically significant.  
 
 
 ## 10.4 
@@ -86,21 +86,21 @@ The slope coefficient (0.693) is not statistically significant.
 Simulation study of statistical significance: Continuing the previous exercise, run a simulation  repeating this process 100 times. This can be done using a loop. From each simulation, save the  z-score (the estimated coefficient of var1 divided by its standard error). If the absolute value of  the z-score exceeds 2, the estimate is “statistically significant.”  To perform this computation, we start by creating an empty vector of z-scores filled with missing values (NAs). Another approach is to start with z_scores <- numeric(length=100), which  would set up a vector of zeroes. In general, however, we prefer to initialize with NAs, because  then when there is a bug in the code, it sometimes shows up as NAs in the final results, alerting  us to the problem. Here is code to perform the simulation: 
 
 ```{r}
-#z_scores <-
-#  rep(NA, 100)
-#for (k in 1:100) {
-#  var1 <- rnorm(1000, 0, 1)
-#  var2 <- rnorm(1000, 0, 1)
-#  fake <- data.frame(var1, var2)
-#  fit <- stan_glm(var2 ~ var1, data = fake, refresh = 0)
-#  z_scores[k] <- coef(fit)[2] / se(fit)[2]
-#}
+z_scores <-
+  rep(NA, 100)
+for (k in 1:100) {
+  var1 <- rnorm(1000, 0, 1)
+  var2 <- rnorm(1000, 0, 1)
+  fake <- data.frame(var1, var2)
+  fit <- stan_glm(var2 ~ var1, data = fake, refresh = 0)
+  z_scores[k] <- coef(fit)[2] / se(fit)[2]
+}
 ```
 
 How many of these 100 z-scores exceed 2 in absolute value, thus achieving the conventional  level of statistical significance?  
 
 ```{r}
-#sum(abs(z_scores) > 2)
+sum(abs(z_scores) > 2)
 ```
 
 
@@ -120,10 +120,10 @@ Fit a regression of child test scores on mother’s age, display the data and fi
 ```{r}
 mod1 <- lm(kid_score ~ mom_age, data = kidiq)
 mod1
-ggplot(kidiq, aes(x = kid_score, y = mom_age)) +
+ggplot(kidiq, aes(x = mom_age, y = kid_score)) +
   geom_point() +
   geom_smooth(method = "lm", se = F) +
-  labs(x = "kid test score", y = "mom age")
+  labs(x = "mother age", y = "kid test score")
 
 par(mfrow = c(2, 2))
 plot(mod1)
@@ -132,7 +132,7 @@ plot(mod1)
 
 Assumptions:  
 
-The residual vs. fitted plot and the scale-location plot show reasonable random spreads of the residuals, so we can assume constant variance. The Q-Q plot displays an overall linear pattern, so the residuals are approximately normal. The residual vs. leverage plot shows a few high leverage data points, but none are too far to worry about (within the dashed line).  
+The residual vs. fitted plot and the scale-location plot show reasonable random spreads of the residuals, so we can assume constant variance. The Q-Q plot displays an overall linear pattern, so the residuals are approximately normal. The residual vs. leverage plot shows a few high leverage data points, but none are too far to worry about (all are within the dashed line).  
 
 Model: $kid\_score=70.96+0.70\times mom\_age+error$  
 
@@ -150,6 +150,10 @@ Repeat this for a regression that further includes mother’s education, interpr
 mod2 <- lm(kid_score ~ mom_age + mom_iq, data = kidiq)
 mod2
 
+ggplot(kidiq, aes(mom_iq, kid_score, color = mom_age)) + 
+  geom_point()+
+  geom_smooth(method = "lm", se = F)
+
 par(mfrow = c(2, 2))
 plot(mod2)
 
@@ -163,7 +167,7 @@ ggpairs(
 
 **Answer: **  
 
-Assumptions:  From the residual vs. fitted plot and the scale-location plot, we need to investigate the condition of constant variance. The center seems differ slightly from both ends. The Q-Q plot is still linear, so the residuals are normal. The residual vs. leverage plot need not to concern us, since nothing seems to go beyond and dashed line.
+Assumptions:  From the residual vs. fitted plot and the scale-location plot, we need to investigate the condition of constant variance, as there seems to be some trend in both. The Q-Q plot is still linear, so the residuals are normal. The residual vs. leverage plot need not to concern us, since nothing seems to go beyond the dashed line.
 
 Multicollinearity does not seem to be a concern between mother's age and IQ (corr = 0.092). 
 
@@ -180,7 +184,7 @@ Now create an indicator variable reflecting whether the mother has completed hig
 ```{r}
 mod3 <-
   stan_glm(
-   kid_score ~ mom_hs + mom_age + mom_hs:mom_age,
+   kid_score ~ as.factor(mom_hs) + mom_age + as.factor(mom_hs):mom_age,
     data = kidiq,
     refresh = 0
   )
@@ -195,13 +199,13 @@ ggplot(kidiq, aes(mom_age, kid_score)) +
 ```
 **Answer: **  
 
-When both are in the model, it seems, without high school education, a kid's score declines as mother's age increases.  
+When both are in the model, it seems, without high school education, a kid's score declines as mother's age increases; with high school education, a kid's score increases as mother's age increases.  
 
 ### (d) 
 
 Finally, fit a regression of child test scores on mother’s age and education level for the first  200 children and use this model to predict test scores for the next 200. Graphically display  comparisons of the predicted and actual scores for the final 200 children.  
 
-(Test sample is slightly larger than 200 because the total is 433. Again, use mom_iq instead of education.)  
+(Use mom_iq instead of education level.)  
 \
 ```{r}
 train <- head(kidiq, 200)
@@ -239,11 +243,14 @@ y <- a + b1 * x1 + b2 * x2 + b3 * x1 * x2 + rnorm(N, 0, sigma)
 fake <- data.frame(x1, x2, y)
 mod5 <- stan_glm(y ~ x1 + x2, data = fake, refresh = 0)
 mod5
+summary(mod5)
 
 pred <- predict(mod5)
 res <- resid(mod5)
-shape_num <- ifelse(x2 == 0, 1, 19)
-plot(pred, res, pch = shape_num)
+shape_num <- ifelse(x2 == 0, 19, 1)
+plot(pred, res, pch = shape_num, main = "pred vs. residual")
+
+plot(x1, y, pch = shape_num, main = "y vs. x1")
 ```
 
 ## 1. 
@@ -256,35 +263,59 @@ The sample size n is extremely large, and the number of predictors p is small.
 
 **Answer: **  
 
+When the number of predictors is small and the sample size is large, the MSE(test) tends to get smaller as a model becomes more flexible. So the more flexible method is expected to perform better than the less flexible.  
 
 ### (b) 
 
 The number of predictors p is extremely large, and the number of observations n is small.  
 
+**Answer: ** 
+
+When the number of predictors is large and the sample size is small, the MSE(test) tends to get bigger as a model becomes more flexible. So the more flexible method is expected to perform worse than the less flexible.  
+
 ### (c) 
 
 The relationship between the predictors and response is highly non-linear.  
+
+**Answer: **  
+
+When the truth is non-linear, the MSE(test) tends to get smaller as a model becomes more flexible. So the more flexible method is expected to perform better than the less flexible.  
 
 ### (d) 
 
 The variance of the error terms, i.e. σ2 = Var(ε), is extremely high.  
 
+**Answer: **  
+
+When the variance of error terms is high, the noise of the data is high, and the MSE(test) tends to increase as the model becomes more flexible. So the more flexible method is expected to perform worse than the less flexible.  
 
 ## 2. 
 
-Explain whether each scenario is a classification or regression problem, and indicate whether we are most interested in inference or pre- diction. Finally, provide n and p.  
+Explain whether each scenario is a classification or regression problem, and indicate whether we are most interested in inference or prediction. Finally, provide n and p.  
 
 ### (a) 
 
 We collect a set of data on the top 500 firms in the US. For each firm we record profit, number of employees, industry and the CEO salary. We are interested in understanding which factors affect CEO salary.  
 
+**Answer: **  
+
+Regression. Inference. n = 500, p = 3, predictors = (record profit, number of employees, industry), outcome = CEO salary.
+
 ### (b) 
 
 We are considering launching a new product and wish to know whether it will be a success or a failure. We collect data on 20 similar products that were previously launched. For each product we have recorded whether it was a success or failure, price charged for the product, marketing budget, competition price, and ten other variables.  
 
+**Answer: **  
+
+Classification. Prediction. n = 20, p = 13, predictors = (price charged for the product, marketing budget, competition price, and ten other variables), outcome = whether it will be a success or a failure.   
+
 ### (c) 
 
-We are interesting in predicting the % change in the US dollar in relation to the weekly changes in the world stock markets. Hence we collect weekly data for all of 2012. For each week we record the % change in the dollar, the % change in the US market, the % change in the British market, and the % change in the German market.  
+We are interesting in predicting the % change in the US dollar in relation to the weekly changes in the world stock markets. Hence we collect weekly data for all of 2012. For each week we record the % change in the dollar, the % change in the US market, the % change in the British market, and the % change in the German market.   
+
+**Answer: **  
+
+Regression. Prediction. n = number of weeks in 2012, p = 3, predictors = (the % change in the US market, the % change in the British market, and the % change in the German market), outcome = the % change in the US dollar.  
 
 ## 3. 
 
@@ -294,10 +325,72 @@ We now revisit the bias-variance decomposition.
 
 Provide a sketch of typical (squared) bias, variance, training error, test error, and Bayes (or irreducible) error curves, on a single plot, as we go from less flexible statistical learning methods towards more flexible approaches. The x-axis should represent the amount of flexibility in the method, and the y-axis should represent the values for each curve. There should be five curves. Make sure to label each one.  
 
+**Answer: **  
+
+```{r}
+x = seq(0.01, 0.99, length = 1000)
+b = 6 - 6 * x ^ (1 / 4)
+c = 8 - 5 * x ^ (1 / 3)
+v = 5 * x ^ 6 + 0.5
+error = 4
+epe = b + v + error
+
+plot(
+  x,
+  b,
+  type = "l",
+  ylim = c(0, 10),
+  col = "blue",
+  lwd = 2,
+  lty = 3,
+  xlab = "Flexibility",
+  ylab = "Error",
+  axes = FALSE,
+  main = "Bias-Flexibility tradeoff"
+)
+axis(1, labels = F)
+axis(2, labels = F)
+grid()
+box()
+lines(x, c, col = "red", lwd = 2, lty = 4)
+lines(x, v, col = "darkorange", lwd = 2, lty = 4)
+lines(x, epe, col = "green", lwd = 2)
+abline(h = error,
+       lty = 2,
+       lwd = 2,
+       col = "darkgrey")
+legend(
+  "topright",
+  c("Bias", "Variance", "Irreducible error", "Test error", "Training error"),
+  lty = c(3, 4, 2, 1, 4),
+  col = c("blue", "darkorange", "darkgrey", "green", "red"),
+  lwd = 2
+)
+```
+
+
 ### (b) 
 
 Explain why each of the five curves has the shape displayed in part (a).  
 
+**Answer: **  
+
+bias: drops as more predictors are added, because more predictors would fit a better model.  
+
+variance: increases as more predictors are added, because more predictors introduces extra influence on estimates.  
+
+training error: decreases as more predictors are added, because more predictors would fit a better model and result less error.  
+
+test error: (depending on the data) goes down and then up, representing a tradeoff between low bias and low variance.  
+
+irreducible error: stays the same, because adding predictors does not change it.  
+
 ## 5. 
 
-What are the advantages and disadvantages of a very flexible (versus a less flexible) approach for regression or classification? Under what circumstances might a more flexible approach be preferred to a less flexible approach? When might a less flexible approach be preferred?
+What are the advantages and disadvantages of a very flexible (versus a less flexible) approach for regression or classification? Under what circumstances might a more flexible approach be preferred to a less flexible approach? When might a less flexible approach be preferred?  
+
+**Answer: **  
+
+The advantage of a very flexible approach is that it fits the training data better, the disadvantage, on the other hand, is that it tends to overfit, unable to make good predictions on a new dataset.  
+
+Whether a more flexible approach is preferred depends on the nature of the data in question. For example, if the truth in a dataset is wiggly and the noise is low, more flexible models can perform better than the less flexible. If the truth is smoother, a less flexible model may perform better.  

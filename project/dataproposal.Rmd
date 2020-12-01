@@ -1,0 +1,232 @@
+
+---
+title: "STA 631 Project Data Proposal"
+author: "Chenfeng Hao"
+date: "Last updated on `r Sys.Date()`"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+  html_document:
+    fig_caption: yes
+    theme: lumen
+    toc: yes
+    toc_depth: 2
+    df_print: kable
+    toc_float:
+      collapsed: no
+---
+
+```{r, message=FALSE}
+# Load all packages here:
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(janitor)
+
+# Set seed value of random number generator to get "replicable" random numbers.
+# The choice of seed value of 76 was an arbitrary one on my part.
+set.seed(76)
+```
+
+Note that it might help to look at https://moderndive.github.io/moderndive_labs/static/term_project/data_example.html 
+The project for their class is less complex than ours as they only need to have two explanatory variables but this gives a sense of what you are doing.  Recall our project rules:
+1. a single quantitative outcome (note that an indicator variable is categorical, not quantitative)
+1. At least 100 observations, can be and probably will be more interesting with more than 100 observations.
+1. At least 8 predictor variables, there should be at least one categorical predictor and one quantitative predictor.
+1. Ideally your data would be independent or approximately independent for this project.  This means you should not have multiple observations on each person, or data that is collected over time on each experimental unit.
+
+# Big-picture
+
+## Research question
+
+_What is your research question?_
+
+Use information about a day and the weather to predict the number of bike rentals.  
+
+## Description of data
+
+_Please give a very short description of the data set along with it's original source._
+
+http://archive.ics.uci.edu/ml/datasets/Bike+Sharing+Dataset  
+Fanaee-T, Hadi, and Gama, Joao, 'Event labeling combining ensemble detectors and background knowledge', Progress in Artificial Intelligence (2013): pp. 1-15, Springer Berlin Heidelberg. 
+
+I found the data through here: https://christophm.github.io/interpretable-ml-book/bike-data.html, as an example for explaining "Interpretable Models". The original data was from the above cited source, which was processed from Capital Bikeshare data between 2011 and 2012.
+
+
+## Load data into R
+
+_Include the code to load your data here. If your data is not confidential nor is it private in nature, consider publishing it as a `.csv` file on Google Sheets as in the code chunk below; instructions on how to do this are in Steps 1-6 [here](https://twitter.com/rudeboybert/status/1055821846539591680). If the data shouldn't be published online, then please submit the spreadsheet file on Blackboard._
+
+```{r, message=FALSE}
+bike <- read.csv("day.csv", stringsAsFactors = FALSE)
+
+bike$weekday <-
+  factor(
+    bike$weekday,
+    levels = 0:6,
+    labels = c('SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT')
+  )
+bike$holiday <-
+  factor(bike$holiday,
+         levels = c(0, 1),
+         labels = c('NO HOLIDAY', 'HOLIDAY'))
+bike$workingday <-
+  factor(
+    bike$workingday,
+    levels = c(0, 1),
+    labels = c('NO WORKING DAY', 'WORKING DAY')
+  )
+bike$season <-
+  factor(
+    bike$season,
+    levels = 1:4,
+    labels = c('SPRING', 'SUMMER', 'FALL', 'WINTER')
+  )
+bike$weathersit <-
+  factor(
+    bike$weathersit,
+    levels = 1:3,
+    labels = c('GOOD', 'MISTY', 'RAIN/SNOW/STORM')
+  )
+bike$mnth <-
+  factor(
+    bike$mnth,
+    levels = 1:12,
+    labels = c(
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OKT',
+      'NOV',
+      'DEZ'
+    )
+  )
+bike$yr[bike$yr == 0] <- 2011
+bike$yr[bike$yr == 1] <- 2012
+bike$yr <-  factor(bike$yr)
+
+bike$temp <-  bike$temp * (39 - (-8)) + (-8)
+bike$windspeed  <-  67 * bike$windspeed
+bike$hum <-  100 * bike$hum
+```
+
+
+## Clean variable names
+
+_Piping your data frame into the `clean_names()` function from the `janitor` package will clean your variable names, making them easier to work with._
+
+```{r message=FALSE, results=F}
+bike %>% clean_names()
+```
+
+
+## Begin to Explore your data
+
+_Be sure to explore your data. Note that `eval=FALSE` is set so that R Markdown doesn't "evaluate" this code chunk, i.e. it will ignore it in the ultimate `.html` report. You should run this code on your own, but not in the ultimate `.html` report._
+
+```{r, eval = FALSE}
+glimpse(bike)
+```
+
+
+
+***
+
+
+
+# Variables
+
+## Identification variable
+
+_What is your identification (ID) variable (if you have one)?_
+
+
+  
+
+"Instant"
+
+## Outcome variable
+
+_What is your outcome variable $y$? What are its units of measurement?_
+
+  
+
+Count of bike rentals, "cnt".  
+
+## Numerical explanatory variables
+
+_What are your numeric explanatory variables? What are their units of measurement?_
+
+  
+
+Temperature: Celsius, humidity: percent, wind speed: km/h.  
+
+## Categorical explanatory variables
+
+_What are your categorical explanatory variables? Summarize the different levels._
+
+  
+
+season: 1-4, year: 2011-2012, month: 1-12, hour: 0-23, workingday: 1-2, weekday: 1-7, weather condition: 1-4  
+
+***
+
+
+# Rows/observations
+
+## Observational units
+
+_What is the observational unit of your data? In other words, what does each row in your data represent?_
+
+
+  
+
+The number of bike rentals on a day, with certain weather conditions. 
+
+## Sample size
+
+_How many rows/cases are in the data i.e. what is the sample size? Is the sample size at least 50?_
+
+731  
+
+***
+
+
+# Preview of data
+
+## Pare down variables
+
+_`select()` the following variables **put the identification variable and outcome variable first** and drop all others. Eliminating all unnecessary variables will making visually exploring the raw values less taxing mentally, as we'll have less data to look at._
+
+1. _The identification variable_
+1. _The outcome variable $y$_
+1. _The numerical explanatory variables_
+1. _The categorical explanatory variables_
+
+
+
+```{r}
+bike <- bike %>% select(-c("instant","dteday","atemp"))
+```
+
+
+## Preview data
+
+
+_IF you have less than 10 or so variables, display a random sample of 5 rows of your data frame by piping it into the `sample_n(5)` function from the `dplyr` package . You'll get the same 5 rows everytime you knit this document and hence replicable results because we set the seed value of the random number generator in the first code chunk above ._
+
+```{r}
+bike %>% sample_n(5)
+```
+
+
+
+
+

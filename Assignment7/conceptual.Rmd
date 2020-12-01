@@ -1,0 +1,193 @@
+---
+title: "Conceptual problems"
+author: "Chenfeng Hao"
+date: "`r format(Sys.time(), tz='EST', '%d %b %Y')`"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. We perform best subset, forward stepwise, and backward stepwise selection on a single data set. For each approach, we obtain p + 1 models, containing 0, 1, 2, . . . , p predictors. Explain your answers:  
+
+(a) Which of the three models with k predictors has the smallest training RSS?  
+
+**Answer: **  
+
+Best subset would have the smallest training RSS, because it goes through all combinations of variables, whereas the other two only go through a nested set of all variables.  
+
+(b) Which of the three models with k predictors has the smallest test RSS?  
+
+**Answer: **  
+
+With the smallest training RSS, the best subset model may overfit. But there is not enough information to determine which model would have the smallest RSS.  
+
+(c) True or False:  
+
+i. The predictors in the k-variable model identified by forward stepwise are a subset of the predictors in the (k + 1)-variable model identified by forward stepwise selection.  
+
+**Answer: **  
+
+True. Forward stepwise starts with no predictors and incrementally selects predictors with the smallest MSE. The k-variable model is nested in the (k + 1)-variable model.  
+
+ii. The predictors in the k-variable model identified by backward stepwise are a subset of the predictors in the (k + 1)-variable model identified by backward stepwise selection.  
+
+**Answer: **  
+
+True. Backward stepwise starts with the full model and decrementally selects predictors with the smallest MSE. The k-variable model is nested in the (k + 1)-variable model. 
+
+iii. The predictors in the k-variable model identified by backward stepwise are a subset of the predictors in the (k + 1)- variable model identified by forward stepwise selection.  
+
+**Answer: **  
+
+False. Because the stepping starts from opposite ends for forward and backward, the k-variable model identified by backward stepwise need not be in a necessary relationship with the (k + 1)- variable model identified by forward stepwise.  
+
+iv. The predictors in the k-variable model identified by forward stepwise are a subset of the predictors in the (k+1)-variable model identified by backward stepwise selection.  
+
+**Answer: **  
+
+False, for the similar reason in iii.  
+
+v. The predictors in the k-variable model identified by best subset are a subset of the predictors in the (k + 1)-variable model identified by best subset selection.   
+**Answer: **  
+
+False. Best subset models are not nested.  
+
+2. For parts (a) through (c), indicate which of i. through iv. is correct. Justify your answer.  
+
+(a) The lasso, relative to least squares, is:  
+
+i. More flexible and hence will give improved prediction accuracy when its increase in bias is less than its decrease in variance.  
+
+**Answer: **  
+
+False. 
+
+ii. More flexible and hence will give improved prediction accuracy when its increase in variance is less than its decrease in bias.  
+
+**Answer: **  
+
+False.    
+
+iii. Less flexible and hence will give improved prediction accuracy when its increase in bias is less than its decrease in variance.  
+
+**Answer: **  
+
+True. The least squares model is more more flexible, with lower bias and higher variance.  
+
+iv. Less flexible and hence will give improved prediction accuracy when its increase in variance is less than its decrease in bias.  
+
+**Answer: **  
+
+False.  
+
+(b) Repeat (a) for ridge regression relative to least squares.  
+
+**Answer: **  
+
+i. False.     
+
+ii. False.  
+
+iii. True, for the similar reason in (a).   
+
+iv. False.  
+
+(c) Repeat (a) for non-linear methods relative to least squares.  
+
+**Answer: **  
+
+i. False 
+
+ii. True. Non-linear models are more flexible than least squares models, because they account for more variance in the data. 
+
+iii. False.  
+
+iv. False. 
+
+3.  
+
+(a) As we increase s from 0, the training RSS will:  
+
+i. Increase initially, and then eventually start decreasing in an inverted U shape.  
+
+ii. Decrease initially, and then eventually start increasing in a U shape.  
+
+iii. Steadily increase.  
+
+iv. Steadily decrease.  
+
+v. Remain constant.  
+
+**Answer: **  
+
+iv. Steadily decrease. As s increases, the model is gaining more flexibility, which leads to decreasing training RSS.  
+
+(b) Repeat (a) for test RSS. 
+
+**Answer: **  
+
+ii. Decrease initially, and then eventually start increasing in a U shape. As s increases, test RSS decreases at first, but starts to increase when the increase in bias is less than its decrease in variance.  
+
+(c) Repeat (a) for variance.  
+
+**Answer: **  
+
+iii. Steadily increase. As the model becomes more flexible, its variance increases.  
+
+(d) Repeat (a) for (squared) bias.  
+
+**Answer: **  
+
+iv. Steadily decrease. As the model becomes more flexible, its bias decreases.
+
+(e) Repeat (a) for the irreducible error.  
+
+**Answer: **  
+
+v. Remain constant. Not affected by changes of s. 
+
+4.  
+
+(a) As we increase lambda from 0, the training RSS will:  
+
+i. Increase initially, and then eventually start decreasing in an inverted U shape.  
+
+ii. Decrease initially, and then eventually start increasing in a U shape.  
+
+iii. Steadily increase.  
+
+iv. Steadily decrease.  
+
+v. Remain constant.  
+
+**Answer: **  
+
+iii. Steadily increase. As lambda increases, the model becomes less flexible, and training RSS increases.  
+
+(b) Repeat (a) for test RSS. 
+
+**Answer: **  
+
+ii. Decrease initially, and then eventually start increasing in a U shape.  
+
+(c) Repeat (a) for variance.  
+
+**Answer: **  
+
+iv. Steadily decrease. As the model becomes less flexible, its variance decreases.  
+
+(d) Repeat (a) for (squared) bias.  
+
+**Answer: **  
+
+iii. Steadily increase. As the model becomes less flexible, its bias increases.  
+
+(e) Repeat (a) for the irreducible error.  
+
+**Answer: **  
+
+v. Remain constant. Not affected by changes of lambda.  

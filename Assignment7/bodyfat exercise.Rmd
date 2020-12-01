@@ -1,0 +1,331 @@
+---
+title: "Model Selection Practice using the BodyFat Data"
+author: "Chenfeng Hao"
+date: "`r format(Sys.time(), tz='EST', '%d %b %Y')`"
+output: 
+  pdf_document: 
+    latex_engine: xelatex
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = T)
+```
+```{r start, results=FALSE, warning=FALSE, message=FALSE}
+library(faraway) 
+library(tidyverse)
+library(leaps)
+library(glmnet)
+library(pls)
+theme_set(theme_classic())
+```
+
+The goal of the exercise is to practice the methods we have been learning.
+
+## Data
+
+The dataset fat is available in the library(faraway). You may have to install this library. Before installing read
+https://hpcsupport.atlassian.net/servicedesk/customer/portal/3/topic/9e49af72-b170-4f7e-ba9c-0a2cfef45cd6/article/562429973
+
+The data set contains several physical measurements of 252 males. Most of the variables can be measured with a scale or tape measure. Can they be used to predict the percentage of body fat? If so, this offers an easy alternative to an underwater weighing technique.
+
+Data frame with 252 observations on the following 19 variables.
+
+The data were supplied by Dr. A. Garth Fisher, Human Performance Research Center, Brigham Young University, Provo, Utah 84602, who gave permission to freely distribute the data and use them for non-commercial purposes. 
+
+Variables:
+
+* brozek – Percent body fat using Brozek’s equation, 457/Density - 414.2
+* siri – Percent body fat using Siri’s equation, 495/Density - 450
+* density – Density (gm/cm^2)
+* age – Age (yrs)
+* weight – Weight (lbs)
+* height – Height (inches)
+* adipos – BMI Adiposity index = Weight/Height^2 (kg/m^2)
+* free – Fat Free Weight = (1 - fraction of body fat) * Weight, using Brozek’s formula (lbs)
+* neck – Neck circumference (cm)
+* chest – Chest circumference (cm)
+* abdom – Abdomen circumference (cm) “at the umbilicus and level with the iliac crest”
+* hip – Hip circumference (cm)
+* dthigh – Thigh circumference (cm)
+* knee – Knee circumference (cm)
+* ankle – Ankle circumference (cm)
+* biceps – Extended biceps circumference (cm)
+* forearm – Forearm circumference (cm)
+* wrist – Wrist circumference (cm) “distal to the styloid processes”
+
+## Task 0 - Data Prep and Division of Data into Test and Train
+With the fat dataset in the library(faraway), we want to fit a linear model to predict body fat (variable brozek) using the other variables available, except for siri (another way of computing body fat), density (it is used in the brozek and siri formulas) and free (it is computed using brozek formula)
+
+```{r}
+library(leaps)
+library(faraway)
+set.seed(1212)
+fat <- fat %>%
+  select(
+    brozek,
+    age,
+    weight,
+    height,
+    adipos,
+    neck,
+    chest,
+    abdom,
+    hip,
+    thigh,
+    knee,
+    ankle,
+    biceps,
+    forearm,
+    wrist
+  )
+
+train <- fat %>%
+  sample_frac(0.67)
+
+test <- fat %>%
+  setdiff(train)
+```
+
+Following the examples we did in class carry out the following.
+
+## Task 1: OLS
+
+In Task 1, carry out OLS on the training data.  Report the Test MSE.
+
+```{r}
+ols_mod <- lm(brozek ~ ., data = train)
+
+ols_test_MSE <- mean((test$brozek - predict(ols_mod, test)) ^ 2)
+
+ols_test_MSE
+```
+
+## Task 2: Best Subsets 
+
+In Task 2, use $R^2 (\tt{rsq})$, RSS, adjusted $R^2$, $C_p$, and BIC to carry out Best subset selection on the training data.  Report the number of predictors selected and the predictors.  Report the test MSE obtained.
+
+```{r}
+sub_mod <- regsubsets(brozek ~ ., data = train, nvmax = ncol(train) - 1)
+
+reg_summary <- summary(sub_mod)
+
+reg_summary
+
+plot(reg_summary$rsq, xlab = "Number of Variables", ylab = "R2", type = "l")
+r2_max <- which.max(reg_summary$rsq) 
+points(r2_max, reg_summary$rsq[r2_max], col ="red", cex = 2, pch = 20)
+
+#par(mfrow = c(2,2))
+plot(reg_summary$rss, xlab = "Number of Variables", ylab = "RSS", type = "l")
+rss_min <- which.min(reg_summary$rss) 
+points(rss_min, reg_summary$rss[rss_min], col ="red", cex = 2, pch = 20)
+
+plot(reg_summary$adjr2, xlab = "Number of Variables", ylab = "Adjusted RSq", type = "l")
+adj_r2_max <- which.max(reg_summary$adjr2) 
+points(adj_r2_max, reg_summary$adjr2[adj_r2_max], col ="red", cex = 2, pch = 20)
+
+plot(reg_summary$cp, xlab = "Number of Variables", ylab = "Cp", type = "l")
+cp_min <- which.min(reg_summary$cp) 
+points(cp_min, reg_summary$cp[cp_min], col = "red", cex = 2, pch = 20)
+
+plot(reg_summary$bic, xlab = "Number of Variables", ylab = "BIC", type = "l")
+bic_min <- which.min(reg_summary$bic) 
+points(bic_min, reg_summary$bic[bic_min], col = "red", cex = 2, pch = 20)
+
+
+test_mat <- model.matrix (brozek ~ ., data = test)
+
+val_errors <- rep(NA, ncol(train) - 1)
+
+for (i in 1:(ncol(train) - 1)) {
+  coefi <- coef(sub_mod, id = i)
+  pred <- test_mat[, names(coefi)] %*% coefi
+  val_errors[i] <-  mean((test$brozek - pred) ^ 2)
+}
+min <- which.min(val_errors)
+plot(val_errors, type = 'b')
+points(min, val_errors[min][1], col = "red", cex = 2, pch = 20)
+
+sub_best <- regsubsets(brozek ~ ., data = train, nvmax = 3)
+coef(sub_best,3)
+best_sub_MSE <- val_errors[3]
+best_sub_MSE
+```
+
+## Task 3: Best Subsets with CV
+In Task 3, do Best Subset with  Cross-Validation (CV) on the training data.  Report the number of predictors selected and the predictors.  Report the test MSE obtained.
+```{r}
+predict.regsubsets <- function(object,newdata,id,...){
+      form <- as.formula(object$call[[2]]) # Extract the formula used when we called regsubsets()
+      mat <- model.matrix(form,newdata)    # Build the model matrix
+      coefi<- coef(object,id=id)          # Extract the coefficients of the ith model
+      xvars <- names(coefi)                # Pull out the names of the predictors used in the ith model
+      mat[,xvars]%*%coefi               # Make predictions using matrix multiplication
+}
+```
+
+
+```{r}
+k <- 10
+set.seed(1)
+
+folds <- sample(1:k, nrow(train), replace = TRUE)
+
+cv_errors <- matrix(NA, k, 14, dimnames = list(NULL, paste(1:14)))
+
+for (j in 1:k) {
+  best_fit <-
+    regsubsets(brozek ~ ., data = train[folds != j, ], nvmax = 14)
+  for (i in 1:14) {
+    pred <- predict(best_fit, train[folds == j, ], id = i)
+    cv_errors[j, i] <- mean((train$brozek[folds == j] - pred) ^ 2)
+  }
+}
+
+mean_cv_errors <- apply(cv_errors, 2, mean)
+
+min <- which.min(mean_cv_errors)
+
+plot(mean_cv_errors, type = 'b')
+points(min,
+       mean_cv_errors[min][1],
+       col = "red",
+       cex = 2,
+       pch = 20)
+
+reg_best <- regsubsets(brozek ~ ., data = train, nvmax = 3)
+coef(reg_best, 3)
+best_sub_cv_MSE <- mean_cv_errors[3]
+best_sub_cv_MSE
+```
+
+
+## Task 4: Ridge Regression
+In Task 4, do Ridge Regression on the training data, use CV to select $\lambda$. Report the test MSE obtained.
+
+```{r}
+set.seed(1)
+
+x_train <- model.matrix(brozek ~ ., train)[, -1]
+x_test <- model.matrix(brozek ~ ., test)[, -1]
+x_fat <- model.matrix(brozek ~ ., fat)[, -1]
+
+y_train <- train %>%
+  select(brozek) %>%
+  unlist()
+
+y_test <- test %>%
+  select(brozek) %>%
+  unlist()
+
+y_fat <- fat %>% 
+  select(brozek) %>%
+  unlist()
+
+grid <- 10 ^ seq(10, -2, length = 100)
+
+ridge_mod <- glmnet(x_train,
+                    y_train,
+                    alpha = 0,
+                    lambda = grid,
+                    thresh = 1e-12)
+
+cv.out <- cv.glmnet(x_train, y_train, alpha = 0)
+bestlam <- cv.out$lambda.min
+
+ridge_pred <- predict(ridge_mod, s = bestlam, newx = x_test)
+ridge_MSE <- mean((ridge_pred - y_test) ^ 2) 
+ridge_MSE
+```
+
+
+## Task 5: LASSO
+In Task 5, do LASSO on the training data, use CV to select $\lambda$. Report the test error obtained, long with the number of non-zero coefficient estimates.
+
+```{r}
+lasso_mod <- glmnet(x_train,
+                    y_train,
+                    alpha = 1,
+                    lambda = grid)
+set.seed(1)
+cv.out <- cv.glmnet(x_train, y_train, alpha = 1)
+bestlam <- cv.out$lambda.min
+lasso_pred <- predict(lasso_mod, s = bestlam, newx = x_test)
+lasso_MSE <- mean((lasso_pred - y_test) ^ 2)
+lasso_MSE
+
+out <- glmnet(x_fat, y_fat, alpha = 1, lambda = grid)
+lasso_coef <- predict(out, type = "coefficients", s = bestlam)[1:15,]
+lasso_coef[lasso_coef != 0]
+```
+
+## Task 6: PCR
+In Task 6, do PCR on the training data, with M chosen using cross-validation. Report the value of M and the test error obtained.
+
+```{r}
+set.seed(1)
+pcr_fit <- pcr(brozek ~ .,
+               data = train,
+               scale = TRUE,
+               validation = "CV")
+
+summary(pcr_fit)
+
+validationplot(pcr_fit, val.type = "MSEP")
+
+pcr_fit2 <- pcr(y_train ~ x_train, scale = TRUE, ncomp = 12)
+summary(pcr_fit2)
+
+pcr_pred <- predict(pcr_fit2, x_test, ncomp = 12)
+
+pcr_MSE <- mean((pcr_pred - y_test) ^ 2)
+pcr_MSE
+```
+
+## Task 7: PLS
+
+In Task 7, do PLS on the training data, with M chosen using cross-validation. Report the value of M and the test error obtained.
+
+```{r}
+set.seed(1)
+pls_fit <- plsr(brozek ~ .,
+               data = train,
+               scale = TRUE,
+               validation = "CV")
+summary(pls_fit)
+validationplot(pls_fit, val.type = "MSEP")
+pls_pred <- predict(pls_fit, x_test, ncomp = 12)
+pls_MSE <- mean((pls_pred - y_test) ^ 2)
+pls_MSE
+pls_fit1 <- plsr(brozek ~ .,
+                 data = fat,
+                 scale = TRUE,
+                 ncomp = 12)
+summary(pls_fit1)
+```
+
+
+## Conclusions
+Based on your analysis above is there a model that seems to work well?  Is there a method that appears to work best based on the test MSE?
+Temporarily change the seed, does it change your results?
+
+MSE:  
+
+OLS: `r ols_test_MSE` 
+
+best subset:  `r best_sub_MSE`
+
+best subset with CV:  `r best_sub_cv_MSE`
+
+ridge:  `r ridge_MSE`
+
+lasso:  `r lasso_MSE`
+
+PCR:  `r pcr_MSE`
+
+PLS:  `r pls_MSE` 
+
+PCR seems to give the least MSE among the group, when random seed is set to 1.  
+
+Changing the seed does change the MSE, however, the least MSE stays in PCR, PLS, or best subset. 
