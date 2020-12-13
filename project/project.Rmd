@@ -1,13 +1,14 @@
-
 ---
 title: "STA 631 Project"
 author: "Chenfeng Hao"
-date: "Last updated on `r Sys.Date()`"
+date: "`r format(Sys.time(), tz = 'EST', '%b %d, %Y')`"
 output:
   github_document:
   pdf_document:
+    latex_engine: xelatex
     toc: yes
     toc_depth: '2'
+    dev: jpeg
   html_document:
     fig_caption: yes
     theme: lumen
@@ -21,11 +22,10 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
   cache = TRUE,
-  cache.lazy = TRUE,
+  cache.lazy = FALSE,
   echo = FALSE,
   warning = FALSE,
   message = FALSE,
-  results = FALSE,
   dpi=180,
   fig.width = 8,
   fig.height = 5
@@ -33,9 +33,9 @@ knitr::opts_chunk$set(
 library(tidyverse)
 library(tidymodels)
 library(skimr)
-library(janitor)
+library(GGally)
+library(vip)
 theme_set(theme_minimal())
-set.seed(76)
 ```
 
 
@@ -65,8 +65,6 @@ I found the data through here: https://christophm.github.io/interpretable-ml-boo
 
 
 ## Load data into R
-
-_Include the code to load your data here. If your data is not confidential nor is it private in nature, consider publishing it as a `.csv` file on Google Sheets as in the code chunk below; instructions on how to do this are in Steps 1-6 [here](https://twitter.com/rudeboybert/status/1055821846539591680). If the data shouldn't be published online, then please submit the spreadsheet file on Blackboard._
 
 ```{r}
 bike <- read.csv("hour.csv", stringsAsFactors = FALSE)
@@ -134,7 +132,7 @@ bike$hum <-  100 * bike$hum
 _Piping your data frame into the `clean_names()` function from the `janitor` package will clean your variable names, making them easier to work with._
 
 ```{r}
-bike %>% clean_names()
+# bike %>% clean_names()
 ```
 
 
@@ -142,8 +140,9 @@ bike %>% clean_names()
 
 _Be sure to explore your data. Note that `eval=FALSE` is set so that R Markdown doesn't "evaluate" this code chunk, i.e. it will ignore it in the ultimate `.html` report. You should run this code on your own, but not in the ultimate `.html` report._
 
-```{r}
+```{r eval=FALSE}
 glimpse(bike)
+skim(bike)
 ```
 
 
@@ -223,11 +222,6 @@ _`select()` the following variables **put the identification variable and outcom
 
 
 
-```{r}
-bike <- bike %>% select(-c("instant","dteday","atemp"))
-```
-
-
 ## Preview data
 
 
@@ -267,9 +261,7 @@ bike %>% sample_n(5)
 •	Any other extra information.
 
 ```{r}
-bike %>% skim()
-
-bike <- bike %>% 
+bike <- bike %>%
   na.omit()
 
 bike %>%
@@ -286,15 +278,372 @@ bike %>%
   ggplot(aes(cnt, value)) +
   geom_boxplot() +
   facet_wrap( ~ name, scales = "free_y")
-
-mosaicplot(bike$season~bike$mnth)
 ```
+
+```{r}
+bike %>%
+  keep(is.numeric) %>%
+  gather() %>%
+  ggplot() +
+  geom_histogram(mapping = aes(x = value, fill = key), color = "black") +
+  facet_wrap( ~ key, scales = "free")
+
+
+
+bike %>%
+  keep(is.numeric) %>%
+  pivot_longer(-cnt, names_to = "Feature", values_to = "Value") %>%
+  ggplot() +
+  geom_point(mapping = aes(x = Value, y = cnt, color = Feature)) +
+  scale_y_continuous(labels = scales::comma) +
+  facet_wrap( ~ Feature, scales = "free", ncol = 3) +
+  scale_x_continuous(n.breaks = 2) +
+  theme(legend.position = "",
+        plot.title.position = "plot") +
+  labs(x = "Numeric Feature Value",
+       title = "Bike Rental Numeric Variable versus Rental Count")
+
+bike %>%
+  keep(is.numeric) %>%
+  corrr::correlate() %>%
+  corrr::rearrange() %>%
+  corrr::shave() %>%
+  corrr::rplot(shape = 15,
+               colours = c("darkorange", "white", "darkcyan"))
+
+bike %>%
+  keep(is.numeric) %>%
+  corrr::correlate() %>%
+  corrr::network_plot(min_cor = 0.2)
+
+bike %>%
+  keep(is.numeric) %>%
+  pivot_longer(everything()) %>%
+  ggplot() +
+  aes(x = value) +
+  geom_density() +
+  facet_wrap( ~ name, scales = "free")
+
+bike %>%
+  select(-instant,-dteday) %>%
+  keep(is.numeric) %>%
+  cor() %>%
+  as_tibble(rownames = "x") %>%
+  pivot_longer(-x) %>%
+  ggplot() +
+  aes(x = x, y = name, fill = value) +
+  geom_raster() +
+  scale_fill_gradient2(low = "purple", mid = "white",
+                       high = "orangered") +
+  labs(x = NULL, y = NULL) +
+  theme(axis.text.x = element_text(
+    angle = 90,
+    hjust = 1,
+    vjust = 0.5
+  ))
+```
+
+```{r}
+bike %>% 
+  keep(is.factor) %>% 
+  dplyr::select(-hr) %>% 
+  ggpairs()
+
+bike_factors <- bike %>%
+  keep(is.factor) %>% 
+  colnames()
+
+chart <- c(bike_factors,"cnt")
+
+bike %>%
+  select_at(vars(chart)) %>%
+  pivot_longer(-cnt, names_to = "Factor", values_to = "Level") %>%
+  ggplot() +
+  geom_boxplot(mapping = aes(x = Level, y = cnt, fill = Factor)) +
+  scale_y_continuous(labels = scales::comma) +
+  facet_wrap( ~ Factor, scales = "free", ncol = 4) +
+  theme(legend.position = "",
+        plot.title.position = "plot") +
+  labs(x = "Categorical Feature Value",
+       title = "Bike Rental Categorical Variable versus Rental Count")
+
+observed_indep_statistic <- bike %>%
+  specify(season ~ mnth) %>%
+  calculate(stat = "Chisq")  
+
+null_distribution_simulated <- bike %>%
+  specify(season ~ mnth) %>%
+  hypothesize(null = "independence") %>%
+  generate(reps = 5000, type = "permute") %>%
+  calculate(stat = "Chisq")
+
+null_distribution_theoretical <- bike %>%
+  specify(season ~ mnth) %>%
+  hypothesize(null = "independence") %>%
+  calculate(stat = "Chisq")
+
+null_distribution_simulated %>%
+  visualize() + 
+  shade_p_value(observed_indep_statistic,
+                direction = "greater")
+
+bike %>%
+  specify(season ~ mnth) %>%
+  hypothesize(null = "independence") %>%
+  visualize(method = "theoretical") + 
+  shade_p_value(observed_indep_statistic,
+                direction = "greater")
+
+null_distribution_simulated %>%
+  visualize(method = "both") + 
+  shade_p_value(observed_indep_statistic,
+                direction = "greater")
+
+p_value_independence <- null_distribution_simulated %>%
+  get_p_value(obs_stat = observed_indep_statistic,
+              direction = "greater")
+p_value_independence
+
+chisq_test(bike, season ~ mnth)
+```
+
+
 ```{r}
 set.seed(1)
-data_split <- initial_split(bike)
-train_data <- training(data_split)
-test_data  <- testing(data_split)
+bike_data <- bike %>%
+  na.omit() %>%
+  dplyr::select(-c(instant, dteday, casual, registered, windspeed, atemp, yr, mnth, hr, weekday))
 
-train_cv <- vfold_cv(train_data)
+set.seed(1)
+data_split <- initial_split(bike_data)
+train_split <- training(data_split)
+test_split  <- testing(data_split)
+
+train_fold <- vfold_cv(train_split)
+
+model_control <- control_grid(save_pred = TRUE, save_workflow = TRUE)
+model_metrics <- metric_set(rmse, mae, rsq)
 ```
+
+```{r}
+pca_rec <- recipe(cnt ~ ., data = train_split) %>%
+  step_nzv(all_predictors()) %>%
+  step_corr(all_numeric(),-all_outcomes()) %>%
+  step_lincomb(all_numeric(),-all_outcomes()) %>%
+  step_other(all_nominal()) %>%
+  step_normalize(all_numeric(),-all_outcomes()) %>%
+  step_dummy(all_nominal()) %>%
+  step_pca(all_predictors(), num_comp = 5)
+
+pca_regression_model <- linear_reg() %>% 
+  set_mode("regression") %>% 
+  set_engine("lm")
+
+pca_wf <- workflow() %>% 
+  add_model(pca_regression_model) %>% 
+  add_recipe(pca_rec)
+
+doParallel::registerDoParallel()
+
+pca_res <- fit_resamples(
+  pca_wf,
+  resamples = train_fold,
+  metrics = model_metrics,
+  control = model_control
+)
+
+doParallel::registerDoParallel()
+
+pca_res %>% 
+  collect_metrics()
+```
+```{r}
+spline_rec <- recipe(cnt~., data = train_split) %>% 
+  step_nzv(all_predictors()) %>% 
+  step_corr(all_numeric(), -all_outcomes()) %>% 
+  step_lincomb(all_numeric(), -all_outcomes()) %>% 
+  step_rm(all_nominal()) %>% 
+  step_bs(all_predictors()) %>% 
+  step_YeoJohnson(all_predictors())
+
+spline_model <- linear_reg() %>% 
+  set_mode("regression") %>% 
+  set_engine("lm")
+
+spline_wf <- workflow() %>% 
+  add_model(spline_model) %>% 
+  add_recipe(spline_rec)
+
+doParallel::registerDoParallel()
+
+spline_res <- fit_resamples(
+  spline_wf,
+  resamples = train_fold,
+  metrics = model_metrics,
+  control = model_control
+)
+
+doParallel::stopImplicitCluster()
+
+spline_res %>% 
+  collect_metrics()
+```
+```{r}
+tidy_rec <- recipe(cnt~., data = train_split) %>% 
+  step_nzv(all_predictors()) %>% 
+  step_corr(all_numeric(), -all_outcomes()) %>% 
+  step_lincomb(all_numeric(), -all_outcomes()) %>% 
+  step_normalize(all_numeric(), -all_outcomes()) %>% 
+  step_dummy(all_nominal()) 
+```
+
+
+```{r}
+glmnet_recipe <-
+  recipe(formula = cnt ~ ., data = train_split) %>%
+  step_novel(all_nominal(),-all_outcomes()) %>%
+  step_dummy(all_nominal(),-all_outcomes()) %>%
+  step_zv(all_predictors()) %>%
+  step_normalize(all_predictors(),-all_nominal())
+
+glmnet_spec <-
+  linear_reg(penalty = tune(),
+             mixture = tune()) %>%
+  set_mode("regression") %>%
+  set_engine("glmnet")
+
+glmnet_workflow <-
+  workflow() %>%
+  add_recipe(glmnet_recipe) %>%
+  add_model(glmnet_spec)
+
+glmnet_grid <-
+  tidyr::crossing(
+    penalty = 10 ^ seq(-6,-1, length.out = 20),
+    mixture = c(0.05,
+                0.2, 0.4, 0.6, 0.8, 1)
+  )
+
+doParallel::registerDoParallel()
+
+set.seed(1)
+glmnet_tune <-
+  tune_grid(glmnet_workflow, 
+            resamples = train_fold, 
+            grid = glmnet_grid) 
+
+doParallel::stopImplicitCluster()
+
+glmnet_final <-
+  glmnet_workflow %>%
+  finalize_workflow(select_best(glmnet_tune))
+
+glmnet_fit <- 
+  last_fit(glmnet_final, data_split)
+
+glmnet_fit %>%
+  collect_metrics()
+
+glmnet_terms <- fit(glmnet_final, train_split) %>%
+  pull_workflow_fit() %>%
+  tidy()
+
+autoplot(glmnet_tune)
+
+glmnet_tune %>%
+  collect_metrics() %>%
+  ggplot(aes(penalty, mean, color = .metric)) +
+  geom_errorbar(aes(
+    ymin = mean - std_err,
+    ymax = mean + std_err
+  ),
+  alpha = 0.5
+  ) +
+  geom_line(size = 1.5) +
+  facet_wrap(~.metric, scales = "free", nrow = 2) +
+  scale_x_log10() +
+  theme(legend.position = "none")
+
+collect_predictions(glmnet_fit) %>%
+  ggplot(aes(cnt, .pred)) +
+  geom_abline(lty = 2, color = "gray50") +
+  geom_point(alpha = 0.5, color = "midnightblue") +
+  coord_fixed()
+
+glmnet_imp_spec <- glmnet_spec %>%
+  finalize_model(select_best(glmnet_tune)) %>%
+  set_engine("glmnet", importance = "permutation")
+
+variable_importance <- workflow() %>%
+  add_recipe(glmnet_recipe) %>%
+  add_model(glmnet_imp_spec) %>%
+  fit(train_split) %>%
+  pull_workflow_fit() %>%
+  vip(aesthetics = list(alpha = 0.8, fill = "midnightblue"))
+```
+
+```{r}
+plot(bike$hr, bike$cnt)
+```
+
+
+```{r}
+#ranger_recipe <-
+#  recipe(formula = cnt ~ ., data = train_split)
+#
+#ranger_spec <-
+#  rand_forest(mtry = tune(),
+#              min_n = tune(),
+#              trees = 1000) %>%
+#  set_mode("regression") %>%
+#  set_engine("ranger")
+#
+#ranger_workflow <-
+#  workflow() %>%
+#  add_recipe(ranger_recipe) %>%
+#  add_model(ranger_spec)
+#
+#doParallel::registerDoParallel()
+
+#set.seed(1)
+#ranger_tune <- tune_grid(ranger_workflow,
+#                         resamples = train_fold,
+#                         grid = 20)
+#
+#doParallel::stopImplicitCluster()
+#
+#ranger_final <- 
+#  ranger_workflow %>% 
+#  finalize_workflow(select_best(ranger_tune))
+#
+#ranger_fit <- 
+#  last_fit(ranger_final, data_split)
+#
+#ranger_fit %>%
+#  collect_metrics()
+#
+#autoplot(ranger_tune)
+#
+#collect_predictions(ranger_fit) %>%
+#  ggplot(aes(cnt, .pred)) +
+#  geom_abline(lty = 2, color = "gray50") +
+#  geom_point(alpha = 0.5, color = "midnightblue") +
+#  coord_fixed()
+#
+#ranger_imp_spec <- ranger_spec %>%
+#  finalize_model(select_best(ranger_tune)) %>%
+#  set_engine("ranger", importance = "permutation")
+#
+#workflow() %>%
+#  add_recipe(ranger_recipe) %>%
+#  add_model(ranger_imp_spec) %>%
+#  fit(train_split) %>%
+#  pull_workflow_fit() %>%
+#  vip(aesthetics = list(alpha = 0.8, fill = "midnightblue"))
+
+#fit(ranger_final, train_split) %>%
+#  pull_workflow_fit()
+```
+
+
 
