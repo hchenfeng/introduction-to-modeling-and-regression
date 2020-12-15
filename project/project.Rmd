@@ -3,20 +3,11 @@ title: "STA 631 Project"
 author: "Chenfeng Hao"
 date: "`r format(Sys.time(), tz = 'EST', '%b %d, %Y')`"
 output:
-  github_document:
-  pdf_document:
+  github_document: default
+  pdf_document: 
     latex_engine: xelatex
-    toc: yes
-    toc_depth: '2'
     dev: jpeg
-  html_document:
-    fig_caption: yes
-    theme: lumen
-    toc: yes
-    toc_depth: 2
-    df_print: kable
-    toc_float:
-      collapsed: no
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -26,7 +17,7 @@ knitr::opts_chunk$set(
   echo = FALSE,
   warning = FALSE,
   message = FALSE,
-  dpi=180,
+  dpi = 180,
   fig.width = 8,
   fig.height = 5
 )
@@ -35,39 +26,15 @@ library(tidymodels)
 library(skimr)
 library(GGally)
 library(vip)
+library(knitr)
+library(furniture)
 theme_set(theme_minimal())
 ```
 
-
-Note that it might help to look at https://moderndive.github.io/moderndive_labs/static/term_project/data_example.html 
-The project for their class is less complex than ours as they only need to have two explanatory variables but this gives a sense of what you are doing.  Recall our project rules:
-1. a single quantitative outcome (note that an indicator variable is categorical, not quantitative)
-1. At least 100 observations, can be and probably will be more interesting with more than 100 observations.
-1. At least 8 predictor variables, there should be at least one categorical predictor and one quantitative predictor.
-1. Ideally your data would be independent or approximately independent for this project.  This means you should not have multiple observations on each person, or data that is collected over time on each experimental unit.
-
-# Big-picture
-
-## Research question
-
-_What is your research question?_
-
-Use information about a day and the weather to predict the number of bike rentals.  
-
-## Description of data
-
-_Please give a very short description of the data set along with it's original source._
-
-http://archive.ics.uci.edu/ml/datasets/Bike+Sharing+Dataset  
-Fanaee-T, Hadi, and Gama, Joao, 'Event labeling combining ensemble detectors and background knowledge', Progress in Artificial Intelligence (2013): pp. 1-15, Springer Berlin Heidelberg. 
-
-I found the data through here: https://christophm.github.io/interpretable-ml-book/bike-data.html, as an example for explaining "Interpretable Models". The original data was from the above cited source, which was processed from Capital Bikeshare data between 2011 and 2012.
-
-
-## Load data into R
+# Load data into R and preprocess
 
 ```{r}
-bike <- read.csv("hour.csv", stringsAsFactors = FALSE)
+bike <- read.csv("day.csv", stringsAsFactors = FALSE)
 
 bike$weekday <-
   factor(
@@ -119,199 +86,93 @@ bike$mnth <-
 bike$yr[bike$yr == 0] <- 2011
 bike$yr[bike$yr == 1] <- 2012
 bike$yr <- factor(bike$yr)
-bike$hr <- factor(bike$hr)
 
 bike$temp <-  bike$temp * (39 - (-8)) + (-8)
+bike$atemp <- bike$atemp * (50 - (16)) + (16)
 bike$windspeed  <-  67 * bike$windspeed
 bike$hum <-  100 * bike$hum
+
+day_diff <- function(date1, date2) {
+  as.numeric(difftime(as.Date(date1), as.Date(date2), units = 'days'))
+}
+
+bike$days_since_2011 <- day_diff(bike$dteday, min(as.Date(bike$dteday)))
+
+bike <- bike %>% select(-dteday)
 ```
 
-
-## Clean variable names
-
-_Piping your data frame into the `clean_names()` function from the `janitor` package will clean your variable names, making them easier to work with._
+# Summary and removal of three variables  
 
 ```{r}
-# bike %>% clean_names()
-```
+bike_summary <- skim(bike)
+bike_summary
 
+table_summary <- table1(bike, output = 'markdown')
+table_summary
 
-## Begin to Explore your data
+# check if "cnt" = "casual" + "registered"  
+sum(bike$cnt) == sum(bike$casual) + sum(bike$registered)
 
-_Be sure to explore your data. Note that `eval=FALSE` is set so that R Markdown doesn't "evaluate" this code chunk, i.e. it will ignore it in the ultimate `.html` report. You should run this code on your own, but not in the ultimate `.html` report._
-
-```{r eval=FALSE}
-glimpse(bike)
-skim(bike)
-```
-
-
-
-***
-
-
-
-# Variables
-
-## Identification variable
-
-_What is your identification (ID) variable (if you have one)?_
-
-
-  
-
-"Instant"
-
-## Outcome variable
-
-_What is your outcome variable $y$? What are its units of measurement?_
-
-  
-
-Count of bike rentals, "cnt".  
-
-## Numerical explanatory variables
-
-_What are your numeric explanatory variables? What are their units of measurement?_
-
-  
-
-Temperature: Celsius, humidity: percent, wind speed: km/h.  
-
-## Categorical explanatory variables
-
-_What are your categorical explanatory variables? Summarize the different levels._
-
-  
-
-season: 1-4, year: 2011-2012, month: 1-12, hour: 0-23, workingday: 1-2, weekday: 1-7, weather condition: 1-4  
-
-***
-
-
-# Rows/observations
-
-## Observational units
-
-_What is the observational unit of your data? In other words, what does each row in your data represent?_
-
-
-  
-
-The number of bike rentals on a day, with certain weather conditions. 
-
-## Sample size
-
-_How many rows/cases are in the data i.e. what is the sample size? Is the sample size at least 50?_
-
-731  
-
-***
-
-
-# Preview of data
-
-## Pare down variables
-
-_`select()` the following variables **put the identification variable and outcome variable first** and drop all others. Eliminating all unnecessary variables will making visually exploring the raw values less taxing mentally, as we'll have less data to look at._
-
-1. _The identification variable_
-1. _The outcome variable $y$_
-1. _The numerical explanatory variables_
-1. _The categorical explanatory variables_
-
-
-
-## Preview data
-
-
-_IF you have less than 10 or so variables, display a random sample of 5 rows of your data frame by piping it into the `sample_n(5)` function from the `dplyr` package . You'll get the same 5 rows everytime you knit this document and hence replicable results because we set the seed value of the random number generator in the first code chunk above ._
-
-```{r}
-bike %>% sample_n(5)
-```
-
-
-# Introduction
-
-• Why is this problem important and worth doing?   
-• Include one or two references to previous work  and/or references that give the reader a general idea about what you are doing and why. 
-• Description of research question or modeling goal for your project.  
-
-# Methods
-
-•	Description of the Data Used, how you obtained the data, what information is in the data. How variables were measured, any issues with reliability or validity.
-•	Description of methods you used and rpackages used.  Your Rmarkdown file will be submitted as an appendix.
-•	Description of what you did for Data Cleaning/Validation/Preparation.
-
-#	Results
-•	Exploratory Data analysis, Visualization (graphs, charts, etc.), data summaries.  There should be a few tables and graphics that tell the reader about who/what is in the data set, and explore general relationships between variables. You will also have diagnostic plots but you can keep some things in the appendix.
-•	Modeling: rationale for modeling approach, selection and evaluation process.
-•	Final model(s) you are going to go with and measures of their success in prediction.  You will run through lots of models but you should settle on one or two for your current “final model” knowing that you could probably keep improving it with more time and energy.
-•	Describe your selected model(s) in words and give statistics on model performance. You might also want to include some plots that help the reader visualize your model fit.
-
-#	Conclusions
-•	give the reader a general idea of what you have accomplished with your model and relationships you discovered.
-•	Give strengths and weaknesses of using your model for prediction.
-•	Give some ideas for what you would do if you had more time and wanted to continue on with the project.
-
-#	Appendix
-•	Rmarkdown file or files
-•	Knit pdf or word document with output.
-•	Any other extra information.
-
-```{r}
 bike <- bike %>%
-  na.omit()
-
-bike %>%
-  select(temp:cnt) %>%
-  pivot_longer(temp:registered) %>%
-  ggplot(aes(cnt, value)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  facet_wrap( ~ name, scales = "free_y")
-
-bike %>%
-  select(c(season:weathersit, cnt)) %>%
-  pivot_longer(season:weathersit) %>%
-  ggplot(aes(cnt, value)) +
-  geom_boxplot() +
-  facet_wrap( ~ name, scales = "free_y")
+  select(-c(instant, casual, registered))
 ```
 
+# Visualization
+
+#```{r}
+#bike_numeric_plot <- bike %>%
+#  select(temp:days_since_2011) %>%
+#  pivot_longer(c(temp:windspeed, days_since_2011)) %>%
+#  ggplot(aes(cnt, value)) +
+#  geom_point() +
+#  geom_smooth(method = "lm") +
+#  facet_wrap( ~ name, scales = "free_y")
+#bike_numeric_plot
+#
+#bike_categorical_plot <- bike %>%
+#  select(c(season:weathersit, cnt)) %>%
+#  pivot_longer(season:weathersit) %>%
+#  ggplot(aes(cnt, value)) +
+#  geom_boxplot() +
+#  facet_wrap( ~ name, scales = "free_y")
+#bike_categorical_plot
+#```
+
 ```{r}
-bike %>%
+bike_numeric_hist <- bike %>%
   keep(is.numeric) %>%
   gather() %>%
   ggplot() +
   geom_histogram(mapping = aes(x = value, fill = key), color = "black") +
   facet_wrap( ~ key, scales = "free")
+bike_numeric_hist
 
-
-
-bike %>%
+bike_numeric_scatter <- bike %>%
   keep(is.numeric) %>%
   pivot_longer(-cnt, names_to = "Feature", values_to = "Value") %>%
   ggplot() +
   geom_point(mapping = aes(x = Value, y = cnt, color = Feature)) +
-  scale_y_continuous(labels = scales::comma) +
+  geom_smooth(mapping = aes(x = Value, y = cnt), method = 'lm') +
   facet_wrap( ~ Feature, scales = "free", ncol = 3) +
   scale_x_continuous(n.breaks = 2) +
   theme(legend.position = "",
         plot.title.position = "plot") +
   labs(x = "Numeric Feature Value",
-       title = "Bike Rental Numeric Variable versus Rental Count")
+       title = "Bike Rental Numeric Variables versus Rental Count")
+bike_numeric_scatter
 
-bike %>%
+numeric_cor <- bike %>%
   keep(is.numeric) %>%
   corrr::correlate() %>%
   corrr::rearrange() %>%
   corrr::shave() %>%
   corrr::rplot(shape = 15,
-               colours = c("darkorange", "white", "darkcyan"))
+               colors = c("darkorange", "white", "darkcyan"))
+numeric_cor
+
 
 bike %>%
+  select(-atemp) %>%
   keep(is.numeric) %>%
   corrr::correlate() %>%
   corrr::network_plot(min_cor = 0.2)
@@ -325,7 +186,6 @@ bike %>%
   facet_wrap( ~ name, scales = "free")
 
 bike %>%
-  select(-instant,-dteday) %>%
   keep(is.numeric) %>%
   cor() %>%
   as_tibble(rownames = "x") %>%
@@ -346,7 +206,6 @@ bike %>%
 ```{r}
 bike %>% 
   keep(is.factor) %>% 
-  dplyr::select(-hr) %>% 
   ggpairs()
 
 bike_factors <- bike %>%
@@ -407,12 +266,12 @@ p_value_independence
 chisq_test(bike, season ~ mnth)
 ```
 
+# Modeling  
 
 ```{r}
 set.seed(1)
 bike_data <- bike %>%
-  na.omit() %>%
-  dplyr::select(-c(instant, dteday, casual, registered, windspeed, atemp, yr, mnth, hr, weekday))
+  dplyr::select(-c(atemp))
 
 set.seed(1)
 data_split <- initial_split(bike_data)
@@ -422,15 +281,41 @@ test_split  <- testing(data_split)
 train_fold <- vfold_cv(train_split)
 
 model_control <- control_grid(save_pred = TRUE, save_workflow = TRUE)
-model_metrics <- metric_set(rmse, mae, rsq)
+```
+
+## base line 
+
+```{r}
+mean_rmse <- sqrt(mean((mean(train_split$cnt) - test_split$cnt)^2))
+mean_rmse
+
+mean_pred <- rep(mean(train_split$cnt), nrow(test_split))
+mean_rmse_1 <-  rmse(test_split, cnt, mean_pred)
+mean_rmse_1
+```
+
+```{r}
+glm_mod <- lm(cnt ~ ., data = train_split)
+glm_pred <- predict(glm_mod, test_split)
+glm_rmse <- rmse(test_split, cnt, glm_pred)
+glm_rmse
+glm_rsq <- rsq(test_split, cnt, glm_pred)
+glm_rsq
+
+par(mfrow = c(2, 2))
+plot(glm_mod)
+doParallel::registerDoParallel()
+stan_glm_mod <- stan_glm(cnt ~., data = tidy_rec, refresh = 0)
+stan_glm_pred <- predict(stan_glm_mod, se.fit = FALSE, newdata = test_split)
+doParallel::stopImplicitCluster()
+stan_glm_rmse <- rmse(test_split, cnt, stan_glm_pred)
+stan_glm_rmse
 ```
 
 ```{r}
 pca_rec <- recipe(cnt ~ ., data = train_split) %>%
-  step_nzv(all_predictors()) %>%
   step_corr(all_numeric(),-all_outcomes()) %>%
   step_lincomb(all_numeric(),-all_outcomes()) %>%
-  step_other(all_nominal()) %>%
   step_normalize(all_numeric(),-all_outcomes()) %>%
   step_dummy(all_nominal()) %>%
   step_pca(all_predictors(), num_comp = 5)
@@ -448,7 +333,6 @@ doParallel::registerDoParallel()
 pca_res <- fit_resamples(
   pca_wf,
   resamples = train_fold,
-  metrics = model_metrics,
   control = model_control
 )
 
@@ -459,7 +343,6 @@ pca_res %>%
 ```
 ```{r}
 spline_rec <- recipe(cnt~., data = train_split) %>% 
-  step_nzv(all_predictors()) %>% 
   step_corr(all_numeric(), -all_outcomes()) %>% 
   step_lincomb(all_numeric(), -all_outcomes()) %>% 
   step_rm(all_nominal()) %>% 
@@ -479,7 +362,6 @@ doParallel::registerDoParallel()
 spline_res <- fit_resamples(
   spline_wf,
   resamples = train_fold,
-  metrics = model_metrics,
   control = model_control
 )
 
@@ -490,21 +372,14 @@ spline_res %>%
 ```
 ```{r}
 tidy_rec <- recipe(cnt~., data = train_split) %>% 
-  step_nzv(all_predictors()) %>% 
-  step_corr(all_numeric(), -all_outcomes()) %>% 
-  step_lincomb(all_numeric(), -all_outcomes()) %>% 
-  step_normalize(all_numeric(), -all_outcomes()) %>% 
-  step_dummy(all_nominal()) 
+  step_dummy(all_nominal()) %>% 
+  prep %>% juice
 ```
 
 
 ```{r}
 glmnet_recipe <-
-  recipe(formula = cnt ~ ., data = train_split) %>%
-  step_novel(all_nominal(),-all_outcomes()) %>%
-  step_dummy(all_nominal(),-all_outcomes()) %>%
-  step_zv(all_predictors()) %>%
-  step_normalize(all_predictors(),-all_nominal())
+  recipe(formula = cnt ~ ., data = train_split)
 
 glmnet_spec <-
   linear_reg(penalty = tune(),
@@ -572,7 +447,7 @@ collect_predictions(glmnet_fit) %>%
 
 glmnet_imp_spec <- glmnet_spec %>%
   finalize_model(select_best(glmnet_tune)) %>%
-  set_engine("glmnet", importance = "permutation")
+  set_engine("glmnet", importance = "rmse")
 
 variable_importance <- workflow() %>%
   add_recipe(glmnet_recipe) %>%
@@ -583,67 +458,150 @@ variable_importance <- workflow() %>%
 ```
 
 ```{r}
-plot(bike$hr, bike$cnt)
-```
+knn_rec <-
+  recipe(formula = cnt ~ ., data = train_split) %>% 
+  step_normalize(all_predictors(), -all_nominal(), -all_outcomes()) %>% 
+  step_dummy(all_nominal()) %>% 
+  prep()
 
+knn_spec <- nearest_neighbor(
+  neighbors = tune(),
+  weight_func = tune(),
+  dist_power = tune()
+) %>%
+  set_engine("kknn") %>%
+  set_mode("regression")
+
+knn_workflow <- workflow() %>% 
+  add_recipe(knn_rec) %>% 
+  add_model(knn_spec)
+
+knn_grid <- grid_regular(neighbors(),
+                         weight_func(),
+                         dist_power(),
+                         levels = 2)
+
+doParallel::registerDoParallel()
+
+set.seed(1)
+knn_rs <- tune_grid(knn_workflow,
+                   resamples = train_fold,
+                   grid = knn_grid,
+                   control = model_control)
+
+doParallel::stopImplicitCluster()
+
+final_knn <- 
+  knn_workflow %>% 
+  finalize_workflow(select_best(knn_rs, "rmse"))
+
+set.seed(1)
+fit_knn <- 
+  last_fit(final_knn, data_split)
+
+fit_knn %>%
+  collect_metrics()
+```
 
 ```{r}
-#ranger_recipe <-
-#  recipe(formula = cnt ~ ., data = train_split)
+ranger_recipe <-
+  recipe(formula = cnt ~ ., data = train_split)
 #
-#ranger_spec <-
-#  rand_forest(mtry = tune(),
-#              min_n = tune(),
-#              trees = 1000) %>%
-#  set_mode("regression") %>%
-#  set_engine("ranger")
+ranger_spec <-
+  rand_forest(mtry = tune(),
+              min_n = tune(),
+              trees = 1000) %>%
+  set_mode("regression") %>%
+  set_engine("ranger")
 #
-#ranger_workflow <-
-#  workflow() %>%
-#  add_recipe(ranger_recipe) %>%
-#  add_model(ranger_spec)
+ranger_workflow <-
+  workflow() %>%
+  add_recipe(ranger_recipe) %>%
+  add_model(ranger_spec)
 #
-#doParallel::registerDoParallel()
+doParallel::registerDoParallel()
 
-#set.seed(1)
-#ranger_tune <- tune_grid(ranger_workflow,
-#                         resamples = train_fold,
-#                         grid = 20)
+set.seed(1)
+ranger_tune <- tune_grid(ranger_workflow,
+                         resamples = train_fold,
+                         grid = 20)
 #
-#doParallel::stopImplicitCluster()
+doParallel::stopImplicitCluster()
 #
-#ranger_final <- 
-#  ranger_workflow %>% 
-#  finalize_workflow(select_best(ranger_tune))
+ranger_final <- 
+  ranger_workflow %>% 
+  finalize_workflow(select_best(ranger_tune))
 #
-#ranger_fit <- 
-#  last_fit(ranger_final, data_split)
+ranger_fit <- 
+  last_fit(ranger_final, data_split)
 #
-#ranger_fit %>%
-#  collect_metrics()
+ranger_fit %>%
+  collect_metrics()
 #
-#autoplot(ranger_tune)
+autoplot(ranger_tune)
 #
-#collect_predictions(ranger_fit) %>%
-#  ggplot(aes(cnt, .pred)) +
-#  geom_abline(lty = 2, color = "gray50") +
-#  geom_point(alpha = 0.5, color = "midnightblue") +
-#  coord_fixed()
+collect_predictions(ranger_fit) %>%
+  ggplot(aes(cnt, .pred)) +
+  geom_abline(lty = 2, color = "gray50") +
+  geom_point(alpha = 0.5, color = "midnightblue") +
+  coord_fixed()
 #
-#ranger_imp_spec <- ranger_spec %>%
-#  finalize_model(select_best(ranger_tune)) %>%
-#  set_engine("ranger", importance = "permutation")
+ranger_imp_spec <- ranger_spec %>%
+  finalize_model(select_best(ranger_tune)) %>%
+  set_engine("ranger", importance = "permutation")
 #
-#workflow() %>%
-#  add_recipe(ranger_recipe) %>%
-#  add_model(ranger_imp_spec) %>%
-#  fit(train_split) %>%
-#  pull_workflow_fit() %>%
-#  vip(aesthetics = list(alpha = 0.8, fill = "midnightblue"))
+workflow() %>%
+  add_recipe(ranger_recipe) %>%
+  add_model(ranger_imp_spec) %>%
+  fit(train_split) %>%
+  pull_workflow_fit() %>%
+  vip(aesthetics = list(alpha = 0.8, fill = "midnightblue"))
 
-#fit(ranger_final, train_split) %>%
-#  pull_workflow_fit()
+fit(ranger_final, train_split) %>%
+  pull_workflow_fit()
 ```
 
+```{r}
+tree_rec <- 
+  recipe(cnt ~ ., train_split)
+
+tree_spec <- decision_tree(
+  cost_complexity = tune(),
+  tree_depth = tune(),
+  min_n = tune()
+) %>%
+  set_engine("rpart") %>%
+  set_mode("regression")
+
+tree_workflow <- workflow() %>% 
+  add_recipe(tree_rec) %>% 
+  add_model(tree_spec)
+
+tree_grid <- tree_spec %>% 
+  parameters() %>% 
+  grid_regular(levels = 4)
+
+doParallel::registerDoParallel()
+
+set.seed(1)
+tree_rs <- tune_grid(
+  tree_workflow,
+  resamples = train_fold,
+  grid = tree_grid,
+  control = model_control
+)
+
+final_tree <- 
+  tree_workflow %>% 
+  finalize_workflow(select_best(tree_rs, "rmse"))
+
+fit_tree <- 
+  last_fit(final_tree, data_split)
+
+doParallel::stopImplicitCluster()
+
+fit_tree %>%
+  collect_metrics()
+```
 
 

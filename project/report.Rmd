@@ -1,0 +1,230 @@
+---
+title: "STA 631 Project Report"
+author: "Chenfeng Hao"
+date: "`r format(Sys.time(), tz = 'EST', '%b %d, %Y')`"
+output:
+  github_document: default
+  pdf_document:
+    latex_engine: xelatex
+    dev: jpeg
+  html_document:
+    fig_caption: yes
+    theme: lumen
+    toc: yes
+    toc_depth: 2
+    df_print: kable
+    toc_float:
+      collapsed: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  cache = TRUE,
+  cache.lazy = FALSE,
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  dpi=180,
+  fig.width = 8,
+  fig.height = 5
+)
+```
+```{r eval=FALSE, include=FALSE}
+renderpdfreport <- function() {
+  rmarkdown::render("report.Rmd", output_format = "pdf_document")
+}
+```
+
+# Introduction
+
+As a toy problem, we are investigating two years' daily bike rental data from Capital Bikeshare and the weather condition during the period, in order to see if we could make reliable predictions on how many bikes are rented given some information about the weather and the day. To be more specific, the statistical question we ask is this: is there a linear relationship between our predictor variables (or a subset of them) and the number of daily bike rentals? Coupled with other relevant information, such predictions could help the bike rental company determine how to adjust their resources to better meet rental bike needs. 
+
+The data we use here is archived in the UCI machine learning repository and have been used in research projects (Fanaee-T & Gama, 2014) and demonstrations (Molnar, 2020). Our main interest is to practice applying some of the methods we learned about multiple linear regression to the dataset. 
+
+***  
+
+# Methods
+
+The data we use here have been processed and contain no missing values or obvious outliers. We do some preprocessing following Molnar (https://github.com/christophM/interpretable-ml-book/blob/master/R/get-bike-sharing-dataset.R). We convert season, year, month, holiday, weekday, working day, and weather situation into factors and assign to them corresponding labels. We also change temperature, feeling temperature, wind speed, and humidity back to the original scale (the dataset contains normalized values for these variables). For date, we covert them into a count of days since 2011. We also drop the instant variable, as we do not take it to be relevant for our analysis.
+
+Here is a brief overview of all predictors and the outcome for the dataset after the processing. 
+
+
+|                 | description |Mean/Count (SD/%) |
+|-----------------|-------------|------------------|
+|                 |             |     n = 731      |
+|     season      | seasons of the year||
+|     SPRING      | |   181 (24.8%)    |
+|     SUMMER      | |   184 (25.2%)    |
+|      FALL       | |   188 (25.7%)    |
+|     WINTER      | |   178 (24.4%)    |
+|       yr        | year ||
+|      2011       | |   365 (49.9%)    |
+|      2012       | |   366 (50.1%)    |
+|      mnth       | month ||
+|       JAN       | |    62 (8.5%)     |
+|       FEB       | |    57 (7.8%)     |
+|       MAR       | |    62 (8.5%)     |
+|       APR       | |    60 (8.2%)     |
+|       MAY       | |    62 (8.5%)     |
+|       JUN       | |    60 (8.2%)     |
+|       JUL       | |    62 (8.5%)     |
+|       AUG       | |    62 (8.5%)     |
+|       SEP       | |    60 (8.2%)     |
+|       OCT       | |    62 (8.5%)     |
+|       NOV       | |    60 (8.2%)     |
+|       DEC       | |    62 (8.5%)     |
+|     holiday     | holiday or not ||
+|   NO HOLIDAY    | |   710 (97.1%)    |
+|     HOLIDAY     | |    21 (2.9%)     |
+|     weekday     | day of the week ||
+|       SUN       | |   105 (14.4%)    |
+|       MON       | |   105 (14.4%)    |
+|       TUE       | |   104 (14.2%)    |
+|       WED       | |   104 (14.2%)    |
+|       THU       | |   104 (14.2%)    |
+|       FRI       | |   104 (14.2%)    |
+|       SAT       | |   105 (14.4%)    |
+|   workingday    | working day or not ||
+| NO WORKING DAY  | |   231 (31.6%)    |
+|   WORKING DAY   | |   500 (68.4%)    |
+|   weathersit    | weather situation ||
+|      GOOD       | |   463 (63.3%)    |
+|      MISTY      | |   247 (33.8%)    |
+| RAIN/SNOW/STORM | |    21 (2.9%)     |
+|      temp       | temperature in Celcius | 15.3 (8.6) |
+|      atemp      | feel-like temperature in Celcius| 32.1 (5.5) |
+|       hum       | humidity |  62.8 (14.2) |
+|    windspeed    | wind speed in km/hr | 12.8 (5.2) |
+|     casual      | count of bikes rented by casual users | 848.2 (686.6) |
+|   registered    | count of bikes rented by registered users | 3656.2 (1560.3) |
+|       cnt       | count of bikes rented | 4504.3 (1937.2) |
+
+
+The outcome variable is "cnt", daily count of bike rented. All the rest are candidate predictor variables. There are a few variables we can drop based on our knowledge of the dataset. First, we can confirm that "casual" and "registered" are partitions of the total count. Since our focus here is on the daily number of bike rentals, we can drop both "casual" and "registered". We should expect dependence between "season" and "mnth", also between "temp" and "atemp", as they are supposed to be related. But we wait until we have done some preliminary analysis before deciding how to deal with multicolinearity.
+
+We use ggplot2 for most of our plots. As an exercise, we practice modeling with both the "glm" package from "stats" (similarly, "stan_glm" from "rstanarm") and the "tidymodels" package. "Tidymodels" is a collection of packages which tries to streamline many of the steps in common data analysis tasks. It follows the "tidyverse" way in terms of syntax and data structure and makes the modeling process more consistent.  
+
+***  
+
+#	Results
+
+## Exploratory Data Analysis  
+
+First, we check the relationship between numerical variables and the outcome.
+
+```{r}
+bike %>%
+  keep(is.numeric) %>%
+  pivot_longer(-cnt, names_to = "Feature", values_to = "Value") %>%
+  ggplot() +
+  geom_point(mapping = aes(x = Value, y = cnt, color = Feature)) +
+  geom_smooth(mapping = aes(x = Value, y = cnt), method = 'lm') +
+  facet_wrap( ~ Feature, scales = "free", ncol = 3) +
+  scale_x_continuous(n.breaks = 2) +
+  theme(legend.position = "",
+        plot.title.position = "plot") +
+  labs(x = "Numeric Feature Value",
+       title = "Bike Rental Numeric Variables versus Rental Count")
+```
+We see positive linear relationships between variables "atemp", "days_since_2011", and "temp" on one side, and bike rental counts on the other. We also see negative linear relationships between humidity and wind speed on the one side, and the number of bike rentals on the other. Although, as we look at the pairwise correlation of the numerical variables, including the outcome, we can confirm the colinearity between "temp" and "atemp" (Pearson correlation coefficient `r cor(bike$temp, bike$atemp)`). 
+
+```{r }
+bike %>%
+  keep(is.numeric) %>%
+  cor() %>%
+  as_tibble(rownames = "x") %>%
+  pivot_longer(-x) %>%
+  ggplot() +
+  aes(x = x, y = name, fill = value) +
+  geom_raster() +
+  scale_fill_gradient2(low = "purple", mid = "white",
+                       high = "orangered") +
+  labs(x = NULL, y = NULL)
+```
+
+
+This is expected, because feel-like temperature is a linear transformation of the real temperature. We choose to use "temp" in our model and drop "atemp".  
+
+We take a look at the relationships between the categorical variables and the outcome.  
+
+```{r}
+bike %>%
+  select_at(vars(chart)) %>%
+  pivot_longer(-cnt, names_to = "Factor", values_to = "Level") %>%
+  ggplot() +
+  geom_boxplot(mapping = aes(x = Level, y = cnt, fill = Factor)) +
+  scale_y_continuous(labels = scales::comma) +
+  facet_wrap( ~ Factor, scales = "free", ncol = 4) +
+  theme(legend.position = "",
+        plot.title.position = "plot") +
+  labs(x = "Categorical Feature Value",
+       title = "Bike Rental Categorical Variable versus Rental Count")
+```
+
+We see that the mean number of bike rentals drop during holidays. Also, as suspected, the plots for month and season show similar contours, suggesting some colinearity. However, we keep them both for now. There are on average more bike rentals during the summer and fall months. And, understandably, more people rent bikes during days of good weather. 
+
+One other thing we can confirm is that the outcome variable is approximately normal. 
+
+```{r}
+bike %>% 
+  select(cnt) %>% 
+  ggplot(aes(cnt)) + 
+  geom_histogram()
+```
+
+
+## Modeling  
+
+We establish a base line using only the mean. We find the rmse estimate is 1863. 
+
+We fit a linear model using all current predictors (7 factor variables and 4 numerical variables) and obtain an rmse of 753 and rsq of 0.837. As a first approximation, the rsq number seems good. We take a look at the diagnostic plots.  
+
+```{r}
+par(mfrow = c(2, 2))
+plot(glm_mod)
+```
+
+We see 
+
+•	Exploratory Data analysis, Visualization (graphs, charts, etc.), data summaries.  There should be a few tables and graphics that tell the reader about who/what is in the data set, and explore general relationships between variables. You will also have diagnostic plots but you can keep some things in the appendix.
+•	Modeling: rationale for modeling approach, selection and evaluation process.
+•	Final model(s) you are going to go with and measures of their success in prediction.  You will run through lots of models but you should settle on one or two for your current “final model” knowing that you could probably keep improving it with more time and energy.
+•	Describe your selected model(s) in words and give statistics on model performance. You might also want to include some plots that help the reader visualize your model fit.
+
+***  
+
+#	Conclusions
+•	give the reader a general idea of what you have accomplished with your model and relationships you discovered.
+•	Give strengths and weaknesses of using your model for prediction.
+•	Give some ideas for what you would do if you had more time and wanted to continue on with the project.
+
+***  
+
+# References
+
+Fanaee-T, H., & Gama, J. (2014). Event labeling combining ensemble detectors and background knowledge. Progress in Artificial Intelligence, 2(2-3), 113-127.
+
+Molnar, C. (2020). Interpretable Machine Learning. United States: Lulu.com.
+
+https://christophm.github.io/interpretable-ml-book/limo.html
+
+http://archive.ics.uci.edu/ml/datasets/Bike+Sharing+Dataset
+
+https://www.tidymodels.org/learn/
+
+https://juliasilge.com/
+
+https://en.wikipedia.org/wiki/Heat_index
+
+
+
+#	Appendix
+
+Here is a list of files submitted with the report.  
+
+•	proposal
+
+•	rmarkdown for analysis  
+
+•	rmarkdown for analysis pdf output  
