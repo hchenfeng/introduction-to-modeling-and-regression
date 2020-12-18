@@ -25,7 +25,6 @@ library(tidyverse)
 library(tidymodels)
 library(skimr)
 library(GGally)
-library(vip)
 library(knitr)
 library(furniture)
 theme_set(theme_minimal())
@@ -92,12 +91,6 @@ bike$atemp <- bike$atemp * (50 - (16)) + (16)
 bike$windspeed  <-  67 * bike$windspeed
 bike$hum <-  100 * bike$hum
 
-day_diff <- function(date1, date2) {
-  as.numeric(difftime(as.Date(date1), as.Date(date2), units = 'days'))
-}
-
-bike$days_since_2011 <- day_diff(bike$dteday, min(as.Date(bike$dteday)))
-
 bike <- bike %>% select(-dteday)
 ```
 
@@ -114,29 +107,11 @@ table_summary
 sum(bike$cnt) == sum(bike$casual) + sum(bike$registered)
 
 bike <- bike %>%
-  select(-c(instant, casual, registered))
+  select(-c(instant, casual, registered, yr))
 ```
 
 # Visualization
 
-#```{r}
-#bike_numeric_plot <- bike %>%
-#  select(temp:days_since_2011) %>%
-#  pivot_longer(c(temp:windspeed, days_since_2011)) %>%
-#  ggplot(aes(cnt, value)) +
-#  geom_point() +
-#  geom_smooth(method = "lm") +
-#  facet_wrap( ~ name, scales = "free_y")
-#bike_numeric_plot
-#
-#bike_categorical_plot <- bike %>%
-#  select(c(season:weathersit, cnt)) %>%
-#  pivot_longer(season:weathersit) %>%
-#  ggplot(aes(cnt, value)) +
-#  geom_boxplot() +
-#  facet_wrap( ~ name, scales = "free_y")
-#bike_categorical_plot
-#```
 
 ```{r}
 bike_numeric_hist <- bike %>%
@@ -220,7 +195,7 @@ bike %>%
   ggplot() +
   geom_boxplot(mapping = aes(x = Level, y = cnt, fill = Factor)) +
   scale_y_continuous(labels = scales::comma) +
-  facet_wrap( ~ Factor, scales = "free", ncol = 4) +
+  facet_wrap( ~ Factor, scales = "free", ncol = 3) +
   theme(legend.position = "",
         plot.title.position = "plot") +
   labs(x = "Categorical Feature Value",
@@ -233,7 +208,7 @@ observed_indep_statistic <- bike %>%
 null_distribution_simulated <- bike %>%
   specify(season ~ mnth) %>%
   hypothesize(null = "independence") %>%
-  generate(reps = 5000, type = "permute") %>%
+  generate(reps = 2000, type = "permute") %>%
   calculate(stat = "Chisq")
 
 null_distribution_theoretical <- bike %>%
@@ -270,8 +245,8 @@ chisq_test(bike, season ~ mnth)
 
 ```{r}
 set.seed(1)
-bike_data <- bike %>%
-  dplyr::select(-c(atemp))
+bike_data <- bike %>% 
+  select(-atemp)
 
 set.seed(1)
 data_split <- initial_split(bike_data)
@@ -294,6 +269,8 @@ mean_rmse_1 <-  rmse(test_split, cnt, mean_pred)
 mean_rmse_1
 ```
 
+## OLS  
+
 ```{r}
 glm_mod <- lm(cnt ~ ., data = train_split)
 glm_pred <- predict(glm_mod, test_split)
@@ -301,85 +278,269 @@ glm_rmse <- rmse(test_split, cnt, glm_pred)
 glm_rmse
 glm_rsq <- rsq(test_split, cnt, glm_pred)
 glm_rsq
-
-par(mfrow = c(2, 2))
-plot(glm_mod)
-doParallel::registerDoParallel()
-stan_glm_mod <- stan_glm(cnt ~., data = tidy_rec, refresh = 0)
-stan_glm_pred <- predict(stan_glm_mod, se.fit = FALSE, newdata = test_split)
-doParallel::stopImplicitCluster()
-stan_glm_rmse <- rmse(test_split, cnt, stan_glm_pred)
-stan_glm_rmse
+glm_coef <- coef(glm_mod)
 ```
 
+## best subset  
+
 ```{r}
-pca_rec <- recipe(cnt ~ ., data = train_split) %>%
-  step_corr(all_numeric(),-all_outcomes()) %>%
-  step_lincomb(all_numeric(),-all_outcomes()) %>%
-  step_normalize(all_numeric(),-all_outcomes()) %>%
-  step_dummy(all_nominal()) %>%
-  step_pca(all_predictors(), num_comp = 5)
+library(leaps)
 
-pca_regression_model <- linear_reg() %>% 
-  set_mode("regression") %>% 
-  set_engine("lm")
+best_subset_mod <-
+  regsubsets(cnt ~ ., data = train_split, nvmax = 27)
 
-pca_wf <- workflow() %>% 
-  add_model(pca_regression_model) %>% 
-  add_recipe(pca_rec)
+reg_summary <- summary(best_subset_mod)
 
-doParallel::registerDoParallel()
+reg_summary
 
-pca_res <- fit_resamples(
-  pca_wf,
-  resamples = train_fold,
-  control = model_control
+plot(reg_summary$rsq,
+     xlab = "Number of Variables",
+     ylab = "R2",
+     type = "l")
+r2_max <- which.max(reg_summary$rsq)
+points(r2_max,
+       reg_summary$rsq[r2_max],
+       col = "red",
+       cex = 2,
+       pch = 20)
+
+#par(mfrow = c(2,2))
+plot(reg_summary$rss,
+     xlab = "Number of Variables",
+     ylab = "RSS",
+     type = "l")
+rss_min <- which.min(reg_summary$rss)
+points(
+  rss_min,
+  reg_summary$rss[rss_min],
+  col = "red",
+  cex = 2,
+  pch = 20
 )
 
-doParallel::registerDoParallel()
-
-pca_res %>% 
-  collect_metrics()
-```
-```{r}
-spline_rec <- recipe(cnt~., data = train_split) %>% 
-  step_corr(all_numeric(), -all_outcomes()) %>% 
-  step_lincomb(all_numeric(), -all_outcomes()) %>% 
-  step_rm(all_nominal()) %>% 
-  step_bs(all_predictors()) %>% 
-  step_YeoJohnson(all_predictors())
-
-spline_model <- linear_reg() %>% 
-  set_mode("regression") %>% 
-  set_engine("lm")
-
-spline_wf <- workflow() %>% 
-  add_model(spline_model) %>% 
-  add_recipe(spline_rec)
-
-doParallel::registerDoParallel()
-
-spline_res <- fit_resamples(
-  spline_wf,
-  resamples = train_fold,
-  control = model_control
+plot(reg_summary$adjr2,
+     xlab = "Number of Variables",
+     ylab = "Adjusted RSq",
+     type = "l")
+adj_r2_max <- which.max(reg_summary$adjr2)
+points(
+  adj_r2_max,
+  reg_summary$adjr2[adj_r2_max],
+  col = "red",
+  cex = 2,
+  pch = 20
 )
 
-doParallel::stopImplicitCluster()
+plot(reg_summary$cp,
+     xlab = "Number of Variables",
+     ylab = "Cp",
+     type = "l")
+cp_min <- which.min(reg_summary$cp)
+points(cp_min,
+       reg_summary$cp[cp_min],
+       col = "red",
+       cex = 2,
+       pch = 20)
 
-spline_res %>% 
-  collect_metrics()
+plot(reg_summary$bic,
+     xlab = "Number of Variables",
+     ylab = "BIC",
+     type = "l")
+bic_min <- which.min(reg_summary$bic)
+points(
+  bic_min,
+  reg_summary$bic[bic_min],
+  col = "red",
+  cex = 2,
+  pch = 20
+)
+
+
+test_mat <- model.matrix (cnt ~ ., data = test_split)
+
+val_errors <- rep(NA, ncol(train_split) - 1)
+
+for (i in 1:(ncol(train_split) - 1)) {
+  coefi <- coef(best_subset_mod, id = i)
+  pred <- test_mat[, names(coefi)] %*% coefi
+  val_errors[i] <-  mean((test_split$cnt - pred) ^ 2)
+}
+min <- which.min(val_errors)
+plot(val_errors, type = 'b')
+points(min,
+       val_errors[min][1],
+       col = "red",
+       cex = 2,
+       pch = 20)
+
+sub_best <- regsubsets(cnt ~ ., data = train_split, nvmax = min)
+coef(sub_best, min)
+best_sub_RMSE <- sqrt(val_errors[min])
+best_sub_RMSE
+
+best_sub_rsq <- reg_summary$adjr2[min]
+best_sub_rsq
+
+min
 ```
+
+## best subset with CV
+
 ```{r}
-tidy_rec <- recipe(cnt~., data = train_split) %>% 
-  step_dummy(all_nominal()) %>% 
-  prep %>% juice
+predict.regsubsets <- function(object, newdata, id, ...) {
+  form <- as.formula(object$call[[2]])
+  mat <- model.matrix(form, newdata)
+  coefi <- coef(object, id = id)
+  xvars <- names(coefi)
+  mat[, xvars] %*% coefi
+}
+
+k <- 10
+set.seed(1)
+
+folds <- sample(1:k, nrow(train_split), replace = TRUE)
+
+cv_errors <- matrix(NA, k, 27, dimnames = list(NULL, paste(1:27)))
+
+for (j in 1:k) {
+  best_fit <-
+    regsubsets(cnt ~ ., data = train_split[folds != j, ], nvmax = 27)
+  for (i in 1:26) {
+    pred <- predict(best_fit, train_split[folds == j, ], id = i)
+    cv_errors[j, i] <- mean((train_split$cnt[folds == j] - pred) ^ 2)
+  }
+}
+
+mean_cv_errors <- apply(cv_errors, 2, mean)
+
+min <- which.min(mean_cv_errors)
+
+plot(mean_cv_errors, type = 'b')
+points(min,
+       mean_cv_errors[min][1],
+       col = "red",
+       cex = 2,
+       pch = 20)
+
+reg_best <- regsubsets(cnt ~ ., data = train_split, nvmax = min)
+coef(reg_best, min)
+best_sub_cv_RMSE <- sqrt(mean_cv_errors[min])
+best_sub_cv_RMSE
 ```
 
+## ridge  
+
+```{r}
+library(glmnet)
+set.seed(1)
+
+x_train <- model.matrix(cnt ~ ., train_split)[, -1]
+x_test <- model.matrix(cnt ~ ., test_split)[, -1]
+x_full <- model.matrix(cnt ~ ., bike_data)[, -1]
+
+y_train <- train_split %>%
+  select(cnt) %>%
+  unlist()
+
+y_test <- test_split %>%
+  select(cnt) %>%
+  unlist()
+
+y_full <-  bike_data %>% 
+  select(cnt) %>%
+  unlist()
+
+grid <- 10 ^ seq(10, -2, length = 100)
+
+ridge_mod <- glmnet(x_train,
+                    y_train,
+                    alpha = 0,
+                    lambda = grid,
+                    thresh = 1e-12)
+
+cv.out <- cv.glmnet(x_train, y_train, alpha = 0)
+bestlam <- cv.out$lambda.min
+
+ridge_pred <- predict(ridge_mod, s = bestlam, newx = x_test)
+ridge_RMSE <- sqrt(mean((ridge_pred - y_test) ^ 2)) 
+ridge_RMSE
+
+out <- glmnet(x_full, y_full, alpha = 0, lambda = grid)
+ridge_coef <- predict(out, type = "coefficients", s = bestlam)[1:27,]
+ridge_coef
+```
+
+## LASSO 
+
+```{r}
+lasso_mod <- glmnet(x_train,
+                    y_train,
+                    alpha = 1,
+                    lambda = grid)
+set.seed(1)
+cv.out <- cv.glmnet(x_train, y_train, alpha = 1)
+bestlam <- cv.out$lambda.min
+lasso_pred <- predict(lasso_mod, s = bestlam, newx = x_test)
+lasso_RMSE <- sqrt(mean((lasso_pred - y_test) ^ 2))
+lasso_RMSE
+
+out <- glmnet(x_full, y_full, alpha = 1, lambda = grid)
+lasso_coef <- predict(out, type = "coefficients", s = bestlam)[1:27,]
+lasso_coef[lasso_coef != 0]
+```
+
+## PCR  
+
+```{r}
+library(pls)
+
+set.seed(1)
+pcr_fit <- pcr(cnt ~ .,
+               data = train_split,
+               scale = TRUE,
+               validation = "CV")
+
+summary(pcr_fit)
+
+validationplot(pcr_fit, val.type = "MSEP")
+
+pcr_fit2 <- pcr(y_train ~ x_train, scale = TRUE, ncomp = 20)
+summary(pcr_fit2)
+
+pcr_pred <- predict(pcr_fit2, x_test, ncomp = 20)
+
+pcr_RMSE <- sqrt(mean((pcr_pred - y_test) ^ 2))
+pcr_RMSE
+```
+
+## PLS  
+
+```{r}
+set.seed(1)
+pls_fit <- plsr(cnt ~ .,
+               data = train_split,
+               scale = TRUE,
+               validation = "CV")
+summary(pls_fit)
+validationplot(pls_fit, val.type = "MSEP")
+pls_pred <- predict(pls_fit, x_test, ncomp = 5)
+pls_RMSE <- sqrt(mean((pls_pred - y_test) ^ 2))
+pls_RMSE
+pls_fit1 <- plsr(cnt ~ .,
+                 data = bike_data,
+                 scale = TRUE,
+                 ncomp = 5)
+summary(pls_fit1)
+```
+
+## tidymodels - LASSO
 
 ```{r}
 glmnet_recipe <-
-  recipe(formula = cnt ~ ., data = train_split)
+  recipe(formula = cnt ~ ., data = train_split) %>% 
+  step_dummy(all_nominal()) %>% 
+  step_normalize(all_numeric(), -all_outcomes())
+
 
 glmnet_spec <-
   linear_reg(penalty = tune(),
@@ -444,24 +605,15 @@ collect_predictions(glmnet_fit) %>%
   geom_abline(lty = 2, color = "gray50") +
   geom_point(alpha = 0.5, color = "midnightblue") +
   coord_fixed()
-
-glmnet_imp_spec <- glmnet_spec %>%
-  finalize_model(select_best(glmnet_tune)) %>%
-  set_engine("glmnet", importance = "rmse")
-
-variable_importance <- workflow() %>%
-  add_recipe(glmnet_recipe) %>%
-  add_model(glmnet_imp_spec) %>%
-  fit(train_split) %>%
-  pull_workflow_fit() %>%
-  vip(aesthetics = list(alpha = 0.8, fill = "midnightblue"))
 ```
+
+## tidymodels - KNN
 
 ```{r}
 knn_rec <-
   recipe(formula = cnt ~ ., data = train_split) %>% 
-  step_normalize(all_predictors(), -all_nominal(), -all_outcomes()) %>% 
-  step_dummy(all_nominal()) %>% 
+  step_normalize(all_numeric(), -all_outcomes()) %>%
+  step_dummy(all_nominal()) %>%
   prep()
 
 knn_spec <- nearest_neighbor(
@@ -503,53 +655,55 @@ fit_knn %>%
   collect_metrics()
 ```
 
+## tidymodels - Random Forest
+
 ```{r}
 ranger_recipe <-
   recipe(formula = cnt ~ ., data = train_split)
-#
+
 ranger_spec <-
   rand_forest(mtry = tune(),
               min_n = tune(),
               trees = 1000) %>%
   set_mode("regression") %>%
   set_engine("ranger")
-#
+
 ranger_workflow <-
   workflow() %>%
   add_recipe(ranger_recipe) %>%
   add_model(ranger_spec)
-#
+
 doParallel::registerDoParallel()
 
 set.seed(1)
 ranger_tune <- tune_grid(ranger_workflow,
                          resamples = train_fold,
                          grid = 20)
-#
+
 doParallel::stopImplicitCluster()
-#
+
 ranger_final <- 
   ranger_workflow %>% 
   finalize_workflow(select_best(ranger_tune))
-#
+
 ranger_fit <- 
   last_fit(ranger_final, data_split)
-#
+
 ranger_fit %>%
   collect_metrics()
-#
+
 autoplot(ranger_tune)
-#
+
 collect_predictions(ranger_fit) %>%
   ggplot(aes(cnt, .pred)) +
   geom_abline(lty = 2, color = "gray50") +
   geom_point(alpha = 0.5, color = "midnightblue") +
   coord_fixed()
-#
+
 ranger_imp_spec <- ranger_spec %>%
   finalize_model(select_best(ranger_tune)) %>%
   set_engine("ranger", importance = "permutation")
-#
+
 workflow() %>%
   add_recipe(ranger_recipe) %>%
   add_model(ranger_imp_spec) %>%
@@ -560,6 +714,8 @@ workflow() %>%
 fit(ranger_final, train_split) %>%
   pull_workflow_fit()
 ```
+
+## tidymodels - Decision Tree
 
 ```{r}
 tree_rec <- 
@@ -604,4 +760,43 @@ fit_tree %>%
   collect_metrics()
 ```
 
+```{r}
+tidy_data <- recipe(cnt~., data = train_split) %>% 
+  step_dummy(all_nominal()) %>% 
+  prep() %>% 
+  juice
+```
+
+# compare RMSE
+
+```{r}
+rmses <- c(pull(glm_rmse), best_sub_RMSE, best_sub_cv_RMSE, ridge_RMSE, lasso_RMSE, pcr_RMSE, pls_RMSE)
+
+models <- c("OLS","best subset", "best subset with CV", "ridge", "lasso", "PCR", "PLS")
+
+comparison <- data.frame(models, rmses)
+comparison %>% kable()
+
+coef_compare <- cbind(cbind(glm_coef, ridge_coef), lasso_coef)
+
+collect_metrics(glmnet_fit) %>%
+  bind_rows(collect_metrics(fit_knn)) %>%
+  bind_rows(collect_metrics(ranger_fit)) %>%
+  bind_rows(collect_metrics(fit_tree)) %>%
+  filter(.metric == "rmse") %>%
+  mutate(model = c("lasso_t", "knn_t", "rf_t", "dtree_t")) %>%
+  knitr::kable()
+```
+
+## OLS with interaction
+
+```{r}
+glm_mod_interaction <- lm(cnt ~ .+season*mnth, data = train_split)
+glm_pred_interaction <- predict(glm_mod_interaction, test_split)
+glm_rmse_i <- rmse(test_split, cnt, glm_pred_interaction)
+glm_rmse_i
+glm_rsq_i <- rsq(test_split, cnt, glm_pred_interaction)
+glm_rsq_i
+glm_coef_i <- coef(glm_mod_interaction)
+```
 
