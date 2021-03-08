@@ -1,3 +1,1 @@
-# GVSU-STA631
-
-Course work for STA 631
+My work for a modeling and regression intro course
